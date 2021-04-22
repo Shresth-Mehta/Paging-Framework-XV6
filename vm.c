@@ -7,6 +7,8 @@
 #include "proc.h"
 #include "elf.h"
 
+#define BUF_SIZE PGSIZE/4
+
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
 
@@ -39,7 +41,7 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
   pte_t *pgtab;
 
   pde = &pgdir[PDX(va)];
-  if(*pde & PTE_P){
+  if(*pde & PTE_P){ 
     pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
   } else {
     if(!alloc || (pgtab = (pte_t*)kalloc()) == 0)
@@ -223,6 +225,12 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
   char *mem;
   uint a;
+  struct proc *proc = myproc();
+
+#ifndef NONE
+  struct freepg *last;
+  uint newpage = 1;
+#endif
 
   if(newsz >= KERNBASE)
     return 0;
@@ -230,13 +238,32 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     return oldsz;
 
   a = PGROUNDUP(oldsz);
+  
   for(; a < newsz; a += PGSIZE){
+#ifndef NONE
+    if(proc->main_mem_pages >= MAX_PSYC_PAGES){
+      if((last = writePageToSwapFile((char*)va)) == 0)
+        panic("allocuvm: There was an error writing to swap file");
+      #if FIFO
+      last->val = (char*)a;
+      last->next = proc->head;
+      proc->head = last;
+      #endif
+      newpage = 0;
+    }
+#endif 
+
     mem = kalloc();
     if(mem == 0){
       cprintf("allocuvm out of memory\n");
       deallocuvm(pgdir, newsz, oldsz);
       return 0;
     }
+    #ifndef NONE
+      if(newpage){
+        recordNewPage((char*)a);
+      }
+    #endif
     memset(mem, 0, PGSIZE);
     if(mappages(pgdir, (char*)a, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0){
       cprintf("allocuvm out of memory (2)\n");
@@ -246,6 +273,134 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     }
   }
   return newsz;
+}
+
+void recordNewPages(char *va){
+  #if FIFO
+    fifoRecord(va);
+  #else
+  proc->main_mem_pages++;
+}
+void fifoRecord(char*){
+  int i;
+  for(i=0;i<MAX_PSYC_PAGES;i++)
+    if(proc->freepages[i].va == (char*)0xffffffff)
+      goto foundrnp;
+  cprintf("panic follows, pid:%d, name:%s\n", proc->pid, proc->name);
+  panic("recordNewPage: no free pages");
+  foundrnp:
+    proc->free_pages[i].va = va;
+    proc->free_pages[i].next = proc->head;
+    proc->head = &proc->free_pages[i];
+}
+
+
+struct freepg *writePageToSwapFile(char *va){
+
+#if FIFO
+  return fifoWrite();  
+#endif
+  return 0;  
+}
+
+struct freepg *fifoWrite(){
+
+  struct proc *proc = myproc();
+  int i;
+  struct freepg *temp, *last;
+  for(i=0;i<MAX_PSYC_PAGES;i++){
+    if(proc->swapped_pages[i].va == (char*)0xffffffff)
+      goto foundswappedpageslot;
+  }
+  panic("writePagesToSwapFile: FIFO no slot for swapped page")
+foundswappedpageslot:
+  temp = proc->head;
+  if(temp == 0)
+    panic("fifoWrite: proc->head is NULL");
+  if(temp->next == 0)
+    panic("fifoWrite: only one page in phy mem");
+  while(temp->next->next!=0)
+    temp = temp->next;
+  last = temp->next;
+  temp->next = 0;
+
+  proc->swapped_pages[i].va = last->va;
+  int num = 0;
+  if((num == writeToSwapFile(proc,(char*)PTE_ADDR(last->va),i*PGSIZE, PGSIZE)) == 0)
+    return 0;
+
+  pte_t *pte1 = walkpgdir(proc->pgdir, (void*)last->va, 0);
+  if(!*pte1)
+    panic("writePageToSwapFile: pte1 is empty")
+  kfree((char*)PTE_ADDR(P2V_WO(*walkpgdir(proc->pgdir, l->va, 0))));
+  *pte1 = PTE_W | PTE_U | PTE_PG;
+  ++proc->page_out_count;
+  ++proc->swap_file_pages;
+  lcr3(v2p(proc->pgdir));
+  return last;
+}
+
+void swapPages(uint addr){
+
+  struct proc *proc = myproc();
+  if (strcmp(proc->name, "init") == 0 || strcmp(proc->name, "sh") == 0) {
+    return;
+  }
+
+#if FIFO
+  fifoSwap(addr);
+#endif
+  lcr3(v2p(proc->pgdir));
+  proc->page_swapped_count++;
+}
+
+void fifoSwap(uint addr){
+
+  struct proc *proc = myproc();
+  int i,j;
+  char buffer[BUF_SIZE];
+  pte_t *pte1, *pte2;
+
+  struct freepg *temp = proc->head;
+  struct freepg *last;
+
+  if(temp == 0)
+    panic("fifoSwap: proc->head is NULL");
+  if (temp->next == 0)
+    panic("fifoSwap: single page in phys mem");
+  // find the before-last link in the used pages list
+  while (temp->next->next != 0)
+    temp = temp->next;
+  last = temp->next;
+  temp->next = 0; 
+
+  pte1 = walkpgdir(proc->pgdir,(void*)last->va,0);  
+  if(!*pte1)
+    panic("swapFile: FIFO pte1 is empty");
+  for(i = 0;i<MAX_PSYC_PAGES;i++)
+    if(proc->swap_file_pages[i].va == (char*)PTE_ADDR(addr))
+      goto foundswappedslot;
+  
+  panic("Problem in swappages");
+  foundswappedslot:
+    proc->swap_file_Pages[i].va = last->va;
+    pte2 = walkpgdir(proc->pgdir, (void*)addr, 0);
+    if(!*pte2)
+      panic("swapFile: FIFO pte2 is empty");
+    
+    *pte2 = PTE_ADDR(*pte1) | PTE_U | PTE_W | PTE_P;
+    for(j=0;j<4;j++){
+      int loc = (i * PGSIZE) + ((PGSIZE / 4) * j);
+      int addroffset = ((PGSIZE / 4) * j);
+      memset(buffer,0,BUF_SIZE);
+      readFromSwapFile(proc,buffer,loc,BUF_SIZE);
+      writeToSwapFile(proc, (char*)(P2V_WO(PTE_ADDR(*pte1)) + addroffset), loc, BUF_SIZE);
+      memmove((void*)(PTE_ADDR(addr) + addroffset), (void*)buf, BUF_SIZE);
+    }
+    *pte = PTE_U | PTE_W | PTE_PG;
+    last->next = proc->head;
+    proc->head = last;
+    last->va = (char*)PTE_ADDR(addr);
 }
 
 // Deallocate user pages to bring the process size from oldsz to

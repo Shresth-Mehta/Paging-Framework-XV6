@@ -8,8 +8,7 @@
 #include "elf.h"
 
 int
-exec(char *path, char **argv)
-{
+exec(char *path, char **argv){
   char *s, *last;
   int i, off;
   uint argc, sz, sp, ustack[3+MAXARG+1];
@@ -17,10 +16,21 @@ exec(char *path, char **argv)
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
-  struct proc *curproc = myproc();
+  struct proc *proc = myproc();
+
+
+  
+  int mem_pages = proc->main_mem_pages;
+  int swap_file_pages = proc->swap_file_pages;
+  int page_fault_count = proc->page_fault_count;
+  int paged_out_count = proc->paged_out_count;
+  struct freepg temp_free_pages[MAX_PSYC_PAGES];
+  struct discpg temp_swap_space_pages[MAX_PSYC_PAGES];
+  struct freepg *head = proc->head;
+  struct freepg *tail = proc->tail;
+
 
   begin_op();
-
   if((ip = namei(path)) == 0){
     end_op();
     cprintf("exec: fail\n");
@@ -37,6 +47,32 @@ exec(char *path, char **argv)
 
   if((pgdir = setupkvm()) == 0)
     goto bad;
+
+  //Clone all the meta-data of a zombie process and removing it from the proc structure
+
+  for(int i=0;i < MAX_PSYC_PAGES; i++){
+    temp_free_pages[i].va = proc->free_pages[i].va;
+    proc->free_pages[i].va = (char*)0xffffffff;
+    temp_free_pages[i].next = proc->free_pages[i].next;
+    proc->free_pages[i].next = 0;
+    temp_free_pages[i].prev = proc->free_pages[i].prev;
+    proc->free_pages[i].prev = 0;
+    temp_free_pages[i].age = proc->free_pages[i].age;
+    proc->free_pages[i].age = 0;
+    temp_swap_space_pages[i].age = proc->swap_space_pages[i].age;
+    proc->swap_space_pages[i].age = 0;
+    temp_swap_space_pages[i].va = proc->swap_space_pages[i].va;
+    proc->swap_space_pages[i].va = 0;
+    temp_swap_space_pages[i].swaploc = proc->swap_space_pages[i].swaploc;
+    proc->swap_space_pages[i].swaploc = 0;
+  }
+
+  proc->main_mem_pages = 0;
+  proc->swap_file_pages = 0;
+  proc->page_fault_count = 0;
+  proc->paged_out_count = 0;
+  proc->head = 0;
+  proc->tail = 0;
 
   // Load program into memory.
   sz = 0;
@@ -91,15 +127,19 @@ exec(char *path, char **argv)
   for(last=s=path; *s; s++)
     if(*s == '/')
       last = s+1;
-  safestrcpy(curproc->name, last, sizeof(curproc->name));
+  safestrcpy(proc->name, last, sizeof(proc->name));
 
   // Commit to the user image.
-  oldpgdir = curproc->pgdir;
-  curproc->pgdir = pgdir;
-  curproc->sz = sz;
-  curproc->tf->eip = elf.entry;  // main
-  curproc->tf->esp = sp;
-  switchuvm(curproc);
+  oldpgdir = proc->pgdir;
+  proc->pgdir = pgdir;
+  proc->sz = sz;
+  proc->tf->eip = elf.entry;  // main
+  proc->tf->esp = sp;
+
+  removeSwapFile(proc);
+  createSwapFile(proc);
+
+  switchuvm(proc);
   freevm(oldpgdir);
   return 0;
 
@@ -110,5 +150,24 @@ exec(char *path, char **argv)
     iunlockput(ip);
     end_op();
   }
+
+  #ifndef NONE
+    proc->main_mem_pages = mem_pages;
+    proc->swap_file_pages = swap_file_pages;
+    proc->page_fault_count = page_fault_count;
+    proc->paged_out_count = paged_out_count;
+    proc->head = head;
+    proc->tail = tail;
+    for (i = 0; i < MAX_PSYC_PAGES; i++) {
+      proc->free_pages[i].va = temp_free_pages[i].va;
+      proc->free_pages[i].next = temp_free_pages[i].next;
+      proc->free_pages[i].prev = temp_free_pages[i].prev;
+      proc->free_pages[i].age = temp_free_pages[i].age;
+      proc->swap_space_pages[i].age = temp_swap_space_pages[i].age;
+      proc->swap_space_pages[i].va = temp_swap_space_pages[i].va;
+      proc->swap_space_pages[i].swaploc = temp_swap_space_pages[i].swaploc;
+    }
+  #endif
+  
   return -1;
 }

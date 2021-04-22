@@ -14,6 +14,7 @@ struct inode {
   uint dev;           // Device number
   uint inum;          // Inode number
   int ref;            // Reference count
+  int flags;
   struct sleeplock lock; // protects everything below here
   int valid;          // inode has been read from disk?
 
@@ -24,6 +25,9 @@ struct inode {
   uint size;
   uint addrs[NDIRECT+1];
 };
+
+#define I_BUSY 0x1
+#define I_VALID 0x2
 
 // table mapping major device number to
 // device functions

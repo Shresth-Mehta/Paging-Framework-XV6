@@ -77,6 +77,17 @@ trap(struct trapframe *tf)
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
     break;
+  
+  case T_PGFLT:
+    addr = rc2();
+    vaddr = &(myproc()->pgdir[PDX(addr)]);
+    if(((int))(*vaddr) & PTE_P)!=0){
+      if(((uint*)PTE_ADDR(P2V(*vaddr)))[PTX(addr)] & PTE_PG){
+        swapPages(PTE_ADDR(addr));
+        ++myproc()->page_fault_count;
+        return;
+      }
+    }
 
   //PAGEBREAK: 13
   default:
