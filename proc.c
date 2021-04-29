@@ -4,8 +4,12 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "x86.h"
-#include "proc.h"
 #include "spinlock.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
+#include "proc.h"
+#include "kalloc.h"
 
 struct {
   struct spinlock lock;
@@ -180,7 +184,7 @@ growproc(int n)
 int
 fork(void)
 {
-  int i, pid;
+  int i, j, pid;
   struct proc *np;
   struct proc *curproc = myproc();
 
@@ -196,6 +200,10 @@ fork(void)
     np->state = UNUSED;
     return -1;
   }
+
+  np->main_mem_pages = curproc->main_mem_pages;
+  np->swap_file_pages = curproc->swap_file_pages;
+
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
@@ -212,22 +220,95 @@ fork(void)
 
   pid = np->pid;
 
+
+  if(curproc->pid > 2)
+  {
+    createSwapFile(np);
+    char buf[PGSIZE/2] = "";
+    int offset = 0;
+    int nread = 0;
+    while((nread == readFromSwapFile(curproc,buf, offset, PGSIZE/2))!=0)
+      if(writeToSwapFile(np, buf, offset, nread) == -1){
+        panic("fork: error while copying the parent's swap file to the child");
+      offset +=nread;
+    }
+  }
+
+  for(i=0;i<MAX_PSYC_PAGES;i++){
+    np->free_pages[i].va = curproc->free_pages[i].va;
+    np->free_pages[i].age = curproc->free_pages[i].age;
+    np->swap_space_pages[i].va = curproc->swap_space_pages[i].va;
+    np->swap_space_pages[i].age = curproc->swap_space_pages[i].age;
+    np->swap_space_pages[i].swaploc = curproc->swap_space_pages[i].swaploc;
+    }
+
+  for(i = 0; i<MAX_PSYC_PAGES; i++){
+    for(j=0;j<MAX_PSYC_PAGES;++j){
+      if(np->free_pages[j].va == curproc->free_pages[i].next->va)
+        np->free_pages[i].next = &np->free_pages[j];
+      if(np->free_pages[j].va == curproc->free_pages[i].prev->va)
+        np->free_pages[i].prev = &np->free_pages[j];
+    }
+  }
+  #if FIFO
+    for(i = 0;i<MAX_PSYC_PAGES;i++){
+      if(curproc->head->va == np->free_pages[i].va)
+        np->head = &np->freepages[i];
+      if(curproc->tail->va == np->free_pages[i].va)
+        np->tail = &np->free_pages[i];
+    }
+  #endif
+
   acquire(&ptable.lock);
-
   np->state = RUNNABLE;
-
   release(&ptable.lock);
-
   return pid;
 }
 
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
 // until its parent calls wait() to find out it exited.
+
+
+
+void custom_proc_print(struct proc *proc)
+{
+  static char *states[] = {
+  [UNUSED]    "unused",
+  [EMBRYO]    "embryo",
+  [SLEEPING]  "sleep ",
+  [RUNNABLE]  "runble",
+  [RUNNING]   "run   ",
+  [ZOMBIE]    "zombie"
+  };
+  int i;
+  char *state;
+  uint pc[10];
+
+  if(proc->state >= 0 && proc->state < NELEM(states) && states[proc->state])
+    state = states[proc->state];
+  else
+    state = "???";
+  cprintf("\npid:%d state:%s name:%s\n", proc->pid, state, proc->name);
+  cprintf("No. of pages currently in physical memory: %d,\n", proc->main_mem_pages);
+  cprintf("No. of pages currently paged out: %d,\n", proc->swap_file_pages);
+  cprintf("Total No. of page faults: %d,\n", proc->page_fault_count);
+  cprintf("Total number of paged out pages: %d,\n\n", proc->page_swapped_count);
+  
+  if(proc->state == SLEEPING){
+      getcallerpcs((uint*)proc->context->ebp+2, pc);
+      for(i=0; i<10 && pc[i] != 0; i++)
+        cprintf(" %p", pc[i]);
+  }
+
+ }
+
+
 void
 exit(void)
 {
   struct proc *curproc = myproc();
+  //cprintf("called_exit %s", curproc->name);
   struct proc *p;
   int fd;
 
@@ -241,6 +322,18 @@ exit(void)
       curproc->ofile[fd] = 0;
     }
   }
+  //cprintf("called1\n");
+  if(curproc->pid >2 &&  curproc->swapFile!=0 && curproc->swapFile->ref > 0)
+  {
+    removeSwapFile(curproc);
+    //cprintf("called1\n");
+  }
+
+  #if TRUE
+    cprintf("called second macro\n");
+    custom_proc_print(proc);
+  #endif
+    
 
   begin_op();
   iput(curproc->cwd);
@@ -251,6 +344,7 @@ exit(void)
 
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
+  
 
   // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -260,7 +354,7 @@ exit(void)
         wakeup1(initproc);
     }
   }
-
+  //cprintf("called2\n");
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   sched();
@@ -500,10 +594,11 @@ kill(int pid)
 // Print a process listing to console.  For debugging.
 // Runs when user types ^P on console.
 // No lock to avoid wedging a stuck machine further.
+
 void
 procdump(void)
 {
-  static char *states[] = {
+  /*static char *states[] = {
   [UNUSED]    "unused",
   [EMBRYO]    "embryo",
   [SLEEPING]  "sleep ",
@@ -529,6 +624,15 @@ procdump(void)
       for(i=0; i<10 && pc[i] != 0; i++)
         cprintf(" %p", pc[i]);
     }
-    cprintf("\n");
-  }
+    cprintf("\n");*/
+    struct proc *p;
+    int percentage;
+
+    for(p = ptable.proc; p<&ptable.proc[NPROC]; p++){
+      if(p->state == UNUSED)
+        continue;
+      custom_proc_print(p);
+    }
+    percentage = free_page_counts.num_curr_free_pages*100/free_page_counts.num_init_free_pages;
+    cprintf("\n\n Number of free physical pages: %d/%d ~ 0.%d%% \n",free_page_counts.num_curr_free_pages,free_page_counts.num_init_free_pages, percentage);
 }

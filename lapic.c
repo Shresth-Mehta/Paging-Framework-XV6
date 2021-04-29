@@ -109,6 +109,7 @@ lapicid(void)
 void
 lapiceoi(void)
 {
+  //cprintf("called lapiceoi\n");
   if(lapic)
     lapicw(EOI, 0);
 }

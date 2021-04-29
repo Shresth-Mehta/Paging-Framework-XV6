@@ -13,6 +13,7 @@ kbdgetc(void)
   uint st, data, c;
 
   st = inb(KBSTATP);
+  //cprintf("called %d\n",st);
   if((st & KBS_DIB) == 0)
     return -1;
   data = inb(KBDATAP);
@@ -46,5 +47,6 @@ kbdgetc(void)
 void
 kbdintr(void)
 {
+  //cprintf("called");
   consoleintr(kbdgetc);
 }

@@ -71,7 +71,7 @@ struct proc {
   int main_mem_pages;
   int swap_file_pages;
   int page_fault_count;
-  int paged_out_count;
+  int page_swapped_count;
   
   struct freepg free_pages[MAX_PSYC_PAGES];
   struct discpg swap_space_pages[MAX_PSYC_PAGES];

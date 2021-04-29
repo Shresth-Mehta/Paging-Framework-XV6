@@ -23,7 +23,7 @@ exec(char *path, char **argv){
   int mem_pages = proc->main_mem_pages;
   int swap_file_pages = proc->swap_file_pages;
   int page_fault_count = proc->page_fault_count;
-  int paged_out_count = proc->paged_out_count;
+  int paged_out_count = proc->page_swapped_count;
   struct freepg temp_free_pages[MAX_PSYC_PAGES];
   struct discpg temp_swap_space_pages[MAX_PSYC_PAGES];
   struct freepg *head = proc->head;
@@ -70,7 +70,7 @@ exec(char *path, char **argv){
   proc->main_mem_pages = 0;
   proc->swap_file_pages = 0;
   proc->page_fault_count = 0;
-  proc->paged_out_count = 0;
+  proc->page_swapped_count = 0;
   proc->head = 0;
   proc->tail = 0;
 
@@ -136,8 +136,9 @@ exec(char *path, char **argv){
   proc->tf->eip = elf.entry;  // main
   proc->tf->esp = sp;
 
-  removeSwapFile(proc);
-  createSwapFile(proc);
+  if(proc->pid > 2){
+    createSwapFile(proc);
+  }
 
   switchuvm(proc);
   freevm(oldpgdir);
@@ -152,10 +153,11 @@ exec(char *path, char **argv){
   }
 
   #ifndef NONE
+    cprintf("called first macro\n");
     proc->main_mem_pages = mem_pages;
     proc->swap_file_pages = swap_file_pages;
     proc->page_fault_count = page_fault_count;
-    proc->paged_out_count = paged_out_count;
+    proc->page_swapped_count = paged_out_count;
     proc->head = head;
     proc->tail = tail;
     for (i = 0; i < MAX_PSYC_PAGES; i++) {
