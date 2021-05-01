@@ -793,9 +793,12 @@ int createSwapFile(struct proc *p)
 //return as sys_write (-1 when error)
 int writeToSwapFile(struct proc *p, char *buffer, uint placeOnFile, uint size)
 {
+  int temp;
   p->swapFile->off = placeOnFile;
-
-  return filewrite(p->swapFile, buffer, size);
+  //cprintf("\ncalled\n");
+  temp = filewrite(p->swapFile, buffer, size);
+  //cprintf("temp = %d\n",temp);
+  return temp;
 }
 
 //return as sys_read (-1 when error)

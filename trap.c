@@ -89,7 +89,8 @@ trap(struct trapframe *tf)
     addr = rcr2();
     vaddr = &(myproc()->pgdir[PDX(addr)]);
     if(((int)(*vaddr) & PTE_P)!=0){
-      if(((uint*)PTE_ADDR(P2V(*vaddr)))[PTX(addr)] & PTE_PS){
+      if(((uint*)PTE_ADDR(P2V(*vaddr)))[PTX(addr)] & PTE_PG){
+        //cprintf("called T_PGFLT\n");
         swapPages(PTE_ADDR(addr));
         ++myproc()->page_fault_count;
         return;

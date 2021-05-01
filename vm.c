@@ -218,8 +218,10 @@ struct freepg *fifoWrite(){
   int i;
   struct freepg *temp, *last;
   for(i=0;i<MAX_PSYC_PAGES;i++){
+    //cprintf("address: %p", proc->swap_space_pages[i].va);
     if(proc->swap_space_pages[i].va == (char*)0xffffffff)
       goto foundswappedpageslot;
+      
   }
   panic("writePagesToSwapFile: FIFO no slot for swapped page");
 foundswappedpageslot:
@@ -235,9 +237,8 @@ foundswappedpageslot:
 
   proc->swap_space_pages[i].va = last->va;
   int num = 0;
-  if((num == writeToSwapFile(proc,(char*)PTE_ADDR(last->va),i*PGSIZE, PGSIZE)) == 0)
+  if((num = writeToSwapFile(proc,(char*)PTE_ADDR(last->va),i*PGSIZE, PGSIZE)) == 0)
     return 0;
-
   pte_t *pte1 = walkpgdir(proc->pgdir, (void*)last->va, 0);
   if(!*pte1)
     panic("writePageToSwapFile: pte1 is empty");
@@ -246,12 +247,14 @@ foundswappedpageslot:
   ++proc->page_swapped_count;
   ++proc->swap_file_pages;
   lcr3(V2P(proc->pgdir));
+  //cprintf("\ncalled\n");
   return last;
 }
 
 struct freepg *writePageToSwapFile(char *va){
 
 #if FIFO
+  //cprintf("called fifo");
   return fifoWrite();  
 #endif
   return 0;  
@@ -274,6 +277,7 @@ void fifoRecord(char *va){
 void recordNewPage(char *va){
   struct proc *proc = myproc();
   #if FIFO
+    //cprintf("called FIFO in recordNewPage\n");
     fifoRecord(va);
   #endif
   proc->main_mem_pages++;
@@ -288,7 +292,6 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
   char *mem;
   uint a;
-  struct proc *proc = myproc();
 
   if(newsz >= KERNBASE)
     return 0;
@@ -297,6 +300,10 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
   a = PGROUNDUP(oldsz);
   
+  #ifndef NONE
+    struct proc *proc = myproc();
+  #endif
+
   for(; a < newsz; a += PGSIZE){
   #ifndef NONE
     struct freepg *last;
@@ -304,13 +311,15 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     if(proc->main_mem_pages >= MAX_PSYC_PAGES && proc->pid > 2){
       if((last = writePageToSwapFile((char*)a)) == 0)
       {
+        //cprintf("%p ",last);
         panic("allocuvm: There was an error writing to swap file");
       }
         
       #if FIFO
-      last->val = (char*)a;
-      last->next = proc->head;
-      proc->head = last;
+      //cprintf("should be called fifo part\n");
+        last->va = (char*)a;
+        last->next = proc->head;
+        proc->head = last;
       #endif
       newpage = 0;
     }
@@ -335,24 +344,11 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       return 0;
     }
   }
+  //cprintf("\ncalled allocuvm: %d\n",newsz);
   return newsz;
 }
 
 
-
-void swapPages(uint addr){
-
-  struct proc *proc = myproc();
-  if (proc->pid <2) {
-    return;
-  }
-
-#if FIFO
-  fifoSwap(addr);
-#endif
-  lcr3(V2P(proc->pgdir));
-  proc->page_swapped_count++;
-}
 
 void fifoSwap(uint addr){
 
@@ -402,6 +398,22 @@ void fifoSwap(uint addr){
     proc->head = last;
     last->va = (char*)PTE_ADDR(addr);
 }
+
+
+void swapPages(uint addr){
+
+  struct proc *proc = myproc();
+  if (proc->pid <2) {
+    return;
+  }
+
+  #if FIFO
+    fifoSwap(addr);
+  #endif
+  lcr3(V2P(proc->pgdir));
+  proc->page_swapped_count++;
+}
+
 
 // Deallocate user pages to bring the process size from oldsz to
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz

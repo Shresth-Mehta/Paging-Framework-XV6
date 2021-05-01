@@ -167,8 +167,12 @@ growproc(int n)
 
   sz = curproc->sz;
   if(n > 0){
-    if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
+    //cprintf("\ncalled n>0\n");
+    if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0){
+      //cprintf("value of size = %d",sz);
       return -1;
+    }
+      
   } else if(n < 0){
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
@@ -253,7 +257,7 @@ fork(void)
   #if FIFO
     for(i = 0;i<MAX_PSYC_PAGES;i++){
       if(curproc->head->va == np->free_pages[i].va)
-        np->head = &np->freepages[i];
+        np->head = &np->free_pages[i];
       if(curproc->tail->va == np->free_pages[i].va)
         np->tail = &np->free_pages[i];
     }
@@ -291,9 +295,9 @@ void custom_proc_print(struct proc *proc)
     state = "???";
   cprintf("\npid:%d state:%s name:%s\n", proc->pid, state, proc->name);
   cprintf("No. of pages currently in physical memory: %d,\n", proc->main_mem_pages);
-  cprintf("No. of pages currently paged out: %d,\n", proc->swap_file_pages);
-  cprintf("Total No. of page faults: %d,\n", proc->page_fault_count);
-  cprintf("Total number of paged out pages: %d,\n\n", proc->page_swapped_count);
+  cprintf("No. of pages currently in swap space: %d,\n", proc->swap_file_pages);
+  cprintf("Count of page faults: %d,\n", proc->page_fault_count);
+  cprintf("Count of paged out pages: %d,\n\n", proc->page_swapped_count);
   
   if(proc->state == SLEEPING){
       getcallerpcs((uint*)proc->context->ebp+2, pc);
@@ -330,8 +334,8 @@ exit(void)
   }
 
   #if TRUE
-    cprintf("called second macro\n");
-    custom_proc_print(proc);
+    //cprintf("called second macro\n");
+    custom_proc_print(curproc);
   #endif
     
 

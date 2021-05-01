@@ -9,6 +9,8 @@
 
 int
 exec(char *path, char **argv){
+  
+  //cprintf("called this but not that in exec.c lolololl");
   char *s, *last;
   int i, off;
   uint argc, sz, sp, ustack[3+MAXARG+1];
@@ -19,7 +21,8 @@ exec(char *path, char **argv){
   struct proc *proc = myproc();
 
 
-  
+  #ifndef NONE
+  //cprintf("called???\n");
   int mem_pages = proc->main_mem_pages;
   int swap_file_pages = proc->swap_file_pages;
   int page_fault_count = proc->page_fault_count;
@@ -28,7 +31,7 @@ exec(char *path, char **argv){
   struct discpg temp_swap_space_pages[MAX_PSYC_PAGES];
   struct freepg *head = proc->head;
   struct freepg *tail = proc->tail;
-
+  #endif
 
   begin_op();
   if((ip = namei(path)) == 0){
@@ -47,33 +50,35 @@ exec(char *path, char **argv){
 
   if((pgdir = setupkvm()) == 0)
     goto bad;
+  //cprintf("called in exec: procdump()");
+  //procdump(myproc());
 
   //Clone all the meta-data of a zombie process and removing it from the proc structure
+  #ifndef NONE
+    for(int i=0;i < MAX_PSYC_PAGES; i++){
+      temp_free_pages[i].va = proc->free_pages[i].va;
+      proc->free_pages[i].va = (char*)0xffffffff;
+      temp_free_pages[i].next = proc->free_pages[i].next;
+      proc->free_pages[i].next = 0;
+      temp_free_pages[i].prev = proc->free_pages[i].prev;
+      proc->free_pages[i].prev = 0;
+      temp_free_pages[i].age = proc->free_pages[i].age;
+      proc->free_pages[i].age = 0;
+      temp_swap_space_pages[i].age = proc->swap_space_pages[i].age;
+      proc->swap_space_pages[i].age = 0;
+      temp_swap_space_pages[i].va = proc->swap_space_pages[i].va;
+      proc->swap_space_pages[i].va = (char*)0xffffffff;
+      temp_swap_space_pages[i].swaploc = proc->swap_space_pages[i].swaploc;
+      proc->swap_space_pages[i].swaploc = 0;
+    }
 
-  for(int i=0;i < MAX_PSYC_PAGES; i++){
-    temp_free_pages[i].va = proc->free_pages[i].va;
-    proc->free_pages[i].va = (char*)0xffffffff;
-    temp_free_pages[i].next = proc->free_pages[i].next;
-    proc->free_pages[i].next = 0;
-    temp_free_pages[i].prev = proc->free_pages[i].prev;
-    proc->free_pages[i].prev = 0;
-    temp_free_pages[i].age = proc->free_pages[i].age;
-    proc->free_pages[i].age = 0;
-    temp_swap_space_pages[i].age = proc->swap_space_pages[i].age;
-    proc->swap_space_pages[i].age = 0;
-    temp_swap_space_pages[i].va = proc->swap_space_pages[i].va;
-    proc->swap_space_pages[i].va = 0;
-    temp_swap_space_pages[i].swaploc = proc->swap_space_pages[i].swaploc;
-    proc->swap_space_pages[i].swaploc = 0;
-  }
-
-  proc->main_mem_pages = 0;
-  proc->swap_file_pages = 0;
-  proc->page_fault_count = 0;
-  proc->page_swapped_count = 0;
-  proc->head = 0;
-  proc->tail = 0;
-
+    proc->main_mem_pages = 0;
+    proc->swap_file_pages = 0;
+    proc->page_fault_count = 0;
+    proc->page_swapped_count = 0;
+    proc->head = 0;
+    proc->tail = 0;
+  #endif
   // Load program into memory.
   sz = 0;
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
@@ -151,9 +156,8 @@ exec(char *path, char **argv){
     iunlockput(ip);
     end_op();
   }
-
+  
   #ifndef NONE
-    cprintf("called first macro\n");
     proc->main_mem_pages = mem_pages;
     proc->swap_file_pages = swap_file_pages;
     proc->page_fault_count = page_fault_count;

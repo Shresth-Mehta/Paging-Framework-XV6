@@ -125,6 +125,7 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+void            custom_proc_print(struct proc*);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
