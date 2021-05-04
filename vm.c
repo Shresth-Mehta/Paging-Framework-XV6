@@ -424,7 +424,8 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
   pte_t *pte;
   uint a, pa;
-
+  int i;
+  struct proc* proc = myproc();
   if(newsz >= oldsz)
     return oldsz;
 
@@ -437,9 +438,40 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       pa = PTE_ADDR(*pte);
       if(pa == 0)
         panic("kfree");
+      if(proc->pgdir == pgdir){
+#ifndef NONE
+        for(i=0; i<MAX_PSYC_PAGES; i++){
+          if(proc->free_pages[i].va == (char*)a){
+            proc->free_pages[i].va = (char*)0xffffffff;
+#if FIFO
+            if (proc->head == &proc->free_pages[i])
+              proc->head = proc->free_pages[i].next;
+            else {
+              struct freepg *last = proc->head;
+              while (last->next != &proc->free_pages[i])
+              last = last->next;
+              last->next = proc->free_pages[i].next;
+            }
+            proc->free_pages[i].next = 0;
+#endif     
+            proc->main_mem_pages--;
+          }    
+        }
+#endif
+      }
       char *v = P2V(pa);
       kfree(v);
       *pte = 0;
+    }
+    else if((*pte & PTE_PG) && proc->pgdir == pgdir){
+      for(i=0; i<MAX_PSYC_PAGES; i++){
+        if(proc->swap_space_pages[i].va == (char*)a){
+          proc->swap_space_pages[i].va = (char*) 0xffffffff;
+          proc->swap_space_pages[i].age = 0;
+          proc->swap_space_pages[i].swaploc = 0;
+          proc->swap_file_pages--;     
+        }
+      }
     }
   }
   return newsz;
@@ -492,8 +524,14 @@ copyuvm(pde_t *pgdir, uint sz)
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
       panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P))
+    if(!(*pte & PTE_P) && !(*pte & PTE_PG))
       panic("copyuvm: page not present");
+    if (*pte & PTE_PG) {
+      // cprintf("copyuvm PTR_PG\n"); // TODO delete
+      pte = walkpgdir(d, (void*) i, 1);
+      *pte = PTE_U | PTE_W | PTE_PG;
+      continue;
+    }
     pa = PTE_ADDR(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)

@@ -50,8 +50,8 @@ exec(char *path, char **argv){
 
   if((pgdir = setupkvm()) == 0)
     goto bad;
-  //cprintf("called in exec: procdump()");
-  //procdump(myproc());
+  //cprintf("called in exec: custom_proc_print");
+  //custom_proc_print(myproc());
 
   //Clone all the meta-data of a zombie process and removing it from the proc structure
   #ifndef NONE
