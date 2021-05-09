@@ -77,6 +77,7 @@ myproc(void) {
 static struct proc*
 allocproc(void)
 {
+  //cprintf("called allocproc\n");
   struct proc *p;
   char *sp;
 
@@ -124,6 +125,7 @@ found:
 void
 userinit(void)
 {
+  //cprintf("called userinit\n");
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
@@ -141,7 +143,10 @@ userinit(void)
   p->tf->ss = p->tf->ds;
   p->tf->eflags = FL_IF;
   p->tf->esp = PGSIZE;
+  //cprintf("called before userinit\n");
   p->tf->eip = 0;  // beginning of initcode.S
+
+  //cprintf("called before userinit\n");
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
@@ -260,6 +265,18 @@ fork(void)
         np->head = &np->free_pages[i];
       if(curproc->tail->va == np->free_pages[i].va)
         np->tail = &np->free_pages[i];
+    }
+  #endif  
+  #if SCFIFO
+    for (i = 0; i < MAX_PSYC_PAGES; i++) {
+      if (curproc->head->va == np->free_pages[i].va){
+        //TODO delete       cprintf("\nfork: head copied!\n\n");
+        np->head = &np->free_pages[i];
+      }
+      if (curproc->tail->va == np->free_pages[i].va){
+        np->tail = &np->free_pages[i];
+        //cprintf("\nfork: head copied!\n\n");
+      }
     }
   #endif
 
@@ -442,6 +459,7 @@ scheduler(void)
       p->state = RUNNING;
 
       swtch(&(c->scheduler), p->context);
+      cprintf("done executing: pid = %d\n",p->pid);
       switchkvm();
 
       // Process is done running for now.

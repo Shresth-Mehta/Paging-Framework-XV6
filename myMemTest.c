@@ -83,7 +83,7 @@ main(int argc, char *argv[]){
     else{
         wait();
         printf(1,"\n-- Deallocating all pages from the parent process\n");
-        sbrk(-15*PAGESIZE);
+        sbrk(-14*PAGESIZE);
         printf(1,"\npress ctrl+P to get process details\n");
         gets(key_stroke,10);
         exit();   

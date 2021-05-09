@@ -251,11 +251,69 @@ foundswappedpageslot:
   return last;
 }
 
+int 
+accessedBit(char *va){
+  struct proc *proc = myproc();
+  uint flag;
+  pte_t *pte = walkpgdir(proc->pgdir,(void*)va,0);
+  if(!pte)
+    panic("pte not found");
+  flag = (*pte) & PTE_A;
+  (*pte) &= ~PTE_A;
+  return flag;
+}
+
+struct freepg *scFifoWrite(char *va){
+
+  struct proc *proc = myproc();
+  int i;
+  struct freepg *itr, *init_itr;
+  for(i=0; i<MAX_PSYC_PAGES; i++){
+    if(proc->swap_space_pages[i].va == (char*)0xffffffff)
+      goto foundFreeSwapPage;
+  }
+  panic("writePageToSwapFile: No free page available in the swap space");
+
+  foundFreeSwapPage:
+    if(proc->head == 0 || proc->head->next == 0)
+      panic("scFifoWrite: not enough phy memory pages");
+    itr = proc->tail;
+    init_itr = proc->tail;
+    do{
+    proc->tail = proc->tail->prev;
+    proc->tail->next = 0;
+    itr->prev = 0;
+    itr->next = proc->head;
+    proc->head->prev = itr;
+    proc->head = itr;
+    itr = proc->tail;
+    }while(accessedBit(proc->head->va) && itr !=init_itr);
+  
+    proc->swap_space_pages[i].va = proc->head->va;
+    int num = 0;
+    if ((num = writeToSwapFile(proc, (char*)PTE_ADDR(proc->head->va), i * PGSIZE, PGSIZE)) == 0)
+      return 0;
+    pte_t *pte1 = walkpgdir(proc->pgdir, (void*)proc->head->va, 0);
+    if(!*pte1)
+      panic("writePageToSwapFile: pte1 not found");
+    
+    kfree((char*)PTE_ADDR(P2V_WO(*walkpgdir(proc->pgdir, proc->head->va, 0))));
+    *pte1 = PTE_W | PTE_U | PTE_PG;
+    ++proc->page_swapped_count;
+    ++proc->swap_file_pages;
+
+    lcr3(V2P(proc->pgdir));
+    proc->head->va = va;
+
+    return proc->head;
+}
 struct freepg *writePageToSwapFile(char *va){
 
 #if FIFO
   //cprintf("called fifo");
-  return fifoWrite();  
+  return fifoWrite(); 
+#elif SCFIFO
+  return scFifoWrite(va);
 #endif
   return 0;  
 }
@@ -274,11 +332,32 @@ void fifoRecord(char *va){
     proc->head = &proc->free_pages[i];
 }
 
+void scFifoRecord(char *va){
+  struct proc *proc = myproc(); 
+  int i;
+  for (i = 0; i < MAX_PSYC_PAGES; i++)
+    if (proc->free_pages[i].va == (char*)0xffffffff)
+      goto foundrnp;
+  cprintf("panic follows, pid:%d, name:%s\n", proc->pid, proc->name);
+  panic("recordNewPage: no free pages");
+foundrnp:
+  proc->free_pages[i].va = va;
+  proc->free_pages[i].next = proc->head;
+  proc->free_pages[i].prev = 0;
+  if(proc->head != 0)
+    proc->head->prev = &proc->free_pages[i];
+  else
+    proc->tail = &proc->free_pages[i];
+  proc->head = &proc->free_pages[i];
+}
+
 void recordNewPage(char *va){
   struct proc *proc = myproc();
   #if FIFO
     //cprintf("called FIFO in recordNewPage\n");
     fifoRecord(va);
+  #elif SCFIFO
+    scFifoRecord(va);
   #endif
   proc->main_mem_pages++;
 }
@@ -323,7 +402,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       #endif
       newpage = 0;
     }
-  #endif 
+  #endif
 
     mem = kalloc();
     if(mem == 0){
@@ -399,7 +478,62 @@ void fifoSwap(uint addr){
     last->va = (char*)PTE_ADDR(addr);
 }
 
+void scFifoSwap(uint addr){
 
+  struct proc *proc = myproc();
+  int i,j;
+  char buf[BUF_SIZE];
+  pte_t *pte1, *pte2;
+  struct freepg *itr, *init_itr;
+
+  if (proc->head == 0)
+    panic("scSwap: proc->head is NULL");
+  if (proc->head->next == 0)
+    panic("scSwap: single page in phys mem");
+
+  itr = proc->tail;
+  init_itr = proc->tail;
+  do{
+    //move mover from tail to head
+    proc->tail = proc->tail->prev;
+    proc->tail->next = 0;
+    itr->prev = 0;
+    itr->next = proc->head;
+    proc->head->prev = itr;
+    proc->head = itr;
+    itr = proc->tail;
+  }while(accessedBit(proc->head->va) && itr != init_itr);
+
+  pte1 = walkpgdir(proc->pgdir, (void*)proc->head->va, 0);
+  if (!*pte1)
+    panic("swapFile: SCFIFO pte1 is empty");
+
+  //find a swap file page descriptor slot
+  for (i = 0; i < MAX_PSYC_PAGES; i++){
+    if (proc->swap_space_pages[i].va == (char*)PTE_ADDR(addr))
+      goto foundFreeSwapPage;
+  }
+  panic("scSwap: SCFIFO no slot for swapped page");
+
+  foundFreeSwapPage:
+    proc->swap_space_pages[i].va = proc->head->va;
+    pte2 = walkpgdir(proc->pgdir, (void*)addr, 0);
+    if (!*pte2)
+      panic("swapFile: SCFIFO pte2 is empty");
+    *pte2 = PTE_ADDR(*pte1) | PTE_U | PTE_W | PTE_P;// access bit is zeroed...
+
+    for (j = 0; j < 4; j++) {
+      int loc = (i * PGSIZE) + ((PGSIZE / 4) * j);
+      int addroffset = ((PGSIZE / 4) * j);
+      memset(buf, 0, BUF_SIZE);
+      readFromSwapFile(proc, buf, loc, BUF_SIZE);
+      writeToSwapFile(proc, (char*)(P2V_WO(PTE_ADDR(*pte1)) + addroffset), loc, BUF_SIZE);
+      memmove((void*)(PTE_ADDR(addr) + addroffset), (void*)buf, BUF_SIZE);
+    }
+    *pte1 = PTE_U | PTE_W | PTE_PG;
+    proc->head->va = (char*)PTE_ADDR(addr);
+
+}
 void swapPages(uint addr){
 
   struct proc *proc = myproc();
@@ -409,6 +543,8 @@ void swapPages(uint addr){
 
   #if FIFO
     fifoSwap(addr);
+  #elif SCFIFO
+    scFifoSwap(addr);
   #endif
   lcr3(V2P(proc->pgdir));
   proc->page_swapped_count++;
@@ -453,6 +589,31 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
               last->next = proc->free_pages[i].next;
             }
             proc->free_pages[i].next = 0;
+#elif SCFIFO
+            if (proc->head == &proc->free_pages[i]){
+              proc->head = proc->free_pages[i].next;
+              if(proc->head != 0)
+                proc->head->prev = 0;
+              proc->free_pages[i].next = 0;
+              proc->free_pages[i].prev = 0;
+            }
+            if (proc->tail == &proc->free_pages[i]){
+              proc->tail = proc->free_pages[i].prev;
+              if(proc->tail != 0)// should allways be true but lets be extra safe...
+                proc->tail->next = 0;
+              proc->free_pages[i].next = 0;
+              proc->free_pages[i].prev = 0;
+
+            }
+            struct freepg *last = proc->head;
+            while (last->next != 0 && last->next != &proc->free_pages[i]){
+              last = last->next;
+            }
+            last->next = proc->free_pages[i].next;
+            if (proc->free_pages[i].next != 0){
+              proc->free_pages[i].next->prev = last;
+            }
+
 #endif     
             proc->main_mem_pages--;
           }    
