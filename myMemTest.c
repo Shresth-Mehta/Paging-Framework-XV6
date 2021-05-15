@@ -8,6 +8,90 @@
 int
 main(int argc, char *argv[]){
 
+#if NFU
+    int i,j;
+    char key_stroke[10];
+    char *arr[27];
+
+    printf(1, "Testing NFU\n");
+    printf(1, "Process Starts Executing\n");
+    printf(1,"\npress ctrl+P to get initial process details\n");
+    gets(key_stroke,10);
+    printf(1,"\n-- Adding 12 more pages to the process\n");
+    //We already have 3 pages for the process in the main memory.
+    //We will now allocate 12 more pages to get to the 15 page limit that we had set
+    for(i = 0; i<12; i++){
+        arr[i] = sbrk(PAGESIZE);
+        printf(1,"arr[%d]=0x%x\n",i,arr[i]);
+    }
+    printf(1,"\npress ctrl+P to get process details\n");
+    gets(key_stroke,10);
+
+    //Adding one more page i.e page 15 
+    printf(1,"\n-- Aloocating 16th page for the process\n");
+    arr[12] = sbrk(PAGESIZE);
+    printf(1,"\npress ctrl+P to get process details\n");
+    gets(key_stroke,10);
+    /*
+	For this allocation, NFU will choose to move to 
+    disk the page that hasn't been accessed the 
+    longest (in this case page 1).
+	Afterwards, page 1 is in the swap file, the rest
+     are in memory.
+	*/
+    
+    //Adding 17th page i.e page 16 
+	arr[13] = sbrk(PAGESIZE);
+    printf(1,"\n-- Aloocating 16th page for the process\n");
+	printf(1, "arr[13]=0x%x\n", arr[13]);
+	printf(1,"\npress ctrl+P to get process details\n");
+	gets(key_stroke,10);
+    /*For this allocation, NFU will choose to move to 
+    disk the page that hasn't been accessed the longest
+    (in this case page 3). Now, pages 1 & 3 are in the
+    swap file, the rest are in memory. Note that no page
+    fault should occur. 
+    */
+
+   // Trying to cause a page fault by accessing page 3 which is in swap space
+   for (i = 0; i < 5; i++) {
+		printf(1, "Writing to address 0x%x\n", arr[i]);
+		for (j = 0; j < PAGESIZE; j++){
+			arr[i][j] = 'k';
+		}
+	}
+    printf(1,"\npress ctrl+P to get process details\n");
+	gets(key_stroke,10);
+    /*
+    The above snippet will cause a total of 5 page faults.
+	Accessing page 3 causes a PGFLT, since it is in the
+    swap file. It would be hot-swapped with page 4 which 
+    is accessed next in the loop. Thus, another PGFLT is 
+    invoked, and this process repeats a total of 5 times.
+    Total number of PGFLTs should thus be 5.
+	*/
+
+    printf(1,"\n-- Testing for fork()\n");
+    if(fork() == 0){
+        printf(1,"\nRunning the child process now, PID: %d\n",getpid());
+        printf(1,"\npress ctrl+P to get process details\n");
+        gets(key_stroke,10);
+        arr[5][0] = 'J';
+        printf(1,"\nExpected page table fault for page number 5.\n");
+        printf(1,"\npress ctrl+P to get process details\n");
+        gets(key_stroke,10);
+        exit();
+    }
+    else{
+        wait();
+        printf(1,"\n-- Deallocating all pages from the parent process\n");
+        sbrk(-14*PAGESIZE);
+        printf(1,"\npress ctrl+P to get process details\n");
+        gets(key_stroke,10);
+        exit();   
+    }
+
+#else 
     printf(1,"-- Process Starts Executing\n");
     int i,j;
     char key_stroke[10];
@@ -110,5 +194,7 @@ main(int argc, char *argv[]){
         gets(key_stroke,10);
         exit();   
     }
+#endif
+
     return 0;
 }
