@@ -24,6 +24,39 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+void 
+updateNFUState(){
+
+  struct proc *p;
+  int i;
+  pte_t *pte, *pde;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p< &ptable.proc[NPROC]; p++){
+    if((p->state == RUNNING || p->state == RUNNABLE || p->state == SLEEPING)){
+        for(i=0; i<MAX_PSYC_PAGES; i++){
+          if(p->free_pages[i].va == (char*)0xffffffff)
+            continue;
+          p->free_pages[i].age++;
+          p->swap_space_pages[i].age++;
+
+          pde = &p->pgdir[PDX(p->free_pages[i].va)];
+          if(*pde & PTE_P){
+            pte_t *pgtab;
+            pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
+            pte = &pgtab[PTX(p->free_pages[i].va)];
+          }
+          else pte = 0;
+          if(pte){
+            if(*pte & PTE_A){
+              p->free_pages[i].age = 0;
+            }
+          }
+        }
+    }
+  }
+  release(&ptable.lock);
+}
 void
 pinit(void)
 {
@@ -270,12 +303,10 @@ fork(void)
   #if SCFIFO
     for (i = 0; i < MAX_PSYC_PAGES; i++) {
       if (curproc->head->va == np->free_pages[i].va){
-        //TODO delete       cprintf("\nfork: head copied!\n\n");
         np->head = &np->free_pages[i];
       }
       if (curproc->tail->va == np->free_pages[i].va){
         np->tail = &np->free_pages[i];
-        //cprintf("\nfork: head copied!\n\n");
       }
     }
   #endif
@@ -459,7 +490,7 @@ scheduler(void)
       p->state = RUNNING;
 
       swtch(&(c->scheduler), p->context);
-      cprintf("done executing: pid = %d\n",p->pid);
+      //cprintf("done executing: pid = %d\n",p->pid);
       switchkvm();
 
       // Process is done running for now.
@@ -655,6 +686,6 @@ procdump(void)
         continue;
       custom_proc_print(p);
     }
-    percentage = free_page_counts.num_curr_free_pages*100/free_page_counts.num_init_free_pages;
-    cprintf("\n\n Number of free physical pages: %d/%d ~ 0.%d%% \n",free_page_counts.num_curr_free_pages,free_page_counts.num_init_free_pages, percentage);
+    percentage = (free_page_counts.num_curr_free_pages*100)/free_page_counts.num_init_free_pages;
+    cprintf("\n\n Number of free physical pages: %d/%d ~ %d%% \n",free_page_counts.num_curr_free_pages,free_page_counts.num_init_free_pages, percentage);
 }

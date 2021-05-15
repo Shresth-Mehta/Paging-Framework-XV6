@@ -44,7 +44,8 @@ void
 kinit2(void *vstart, void *vend)
 {
   freerange(vstart, vend);
-  free_page_counts.num_init_free_pages = (PGROUNDDOWN((uint)vend) - PGROUNDUP((uint)vstart)) / PGSIZE;
+  free_page_counts.num_init_free_pages += (PGROUNDDOWN((uint)vend) - PGROUNDUP((uint)vstart)) / PGSIZE;
+  free_page_counts.num_curr_free_pages = free_page_counts.num_init_free_pages;
   kmem.use_lock = 1;
 }
 

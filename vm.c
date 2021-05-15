@@ -18,7 +18,6 @@ void
 seginit(void)
 {
   struct cpu *c;
-
   // Map "logical" addresses to virtual addresses using identity map.
   // Cannot share a CODE descriptor for both kernel and user
   // because it would have to have DPL_USR, but the CPU forbids
@@ -307,6 +306,60 @@ struct freepg *scFifoWrite(char *va){
 
     return proc->head;
 }
+
+struct freepg *nfuWrite(char *va)
+{
+  struct proc *proc = myproc();
+  int i,j;
+  uint maxIndex = -1;
+  uint maxAge = 0;
+
+  struct freepg *candidate;
+
+  for(i=0; i<MAX_PSYC_PAGES; i++){
+    if(proc->swap_space_pages[i].va == (char*)0xffffffff)
+      goto foundswappedpageslot;
+  }
+  panic("writePageToSwapFile: NFU no slot for swapped page");
+
+  foundswappedpageslot:
+    for(j=0; j<MAX_PSYC_PAGES; j++){
+      if(proc->free_pages[j].va != (char*)0xffffffff){
+        if(proc->free_pages[j].age > maxAge){
+            maxAge = proc->free_pages[j].age;
+            maxIndex = j;
+          }
+      }
+    }
+    if(maxIndex == -1)
+      panic("nfuWrite: no free page to swap");
+    candidate = &proc->free_pages[maxIndex];
+
+    pte_t *pte1 = walkpgdir(proc->pgdir, (void*)candidate->va, 0);
+    if(!pte1)
+      panic("writePageToSwapFile: nfuWrite pte1 is empty");
+    
+    acquire(&tickslock);
+    if((*pte1) && PTE_A){
+      candidate->age+=1;;
+      *pte1 &= ~PTE_A;
+    }
+    release(&tickslock);
+    proc->swap_space_pages[i].va = candidate->va;
+
+    int test_num = 0;
+    if ((test_num = writeToSwapFile(proc, (char*)PTE_ADDR(candidate->va), i * PGSIZE, PGSIZE)) == 0)
+      return 0;
+    kfree((char*)PTE_ADDR(P2V_WO(*walkpgdir(proc->pgdir, candidate->va, 0))));
+    *pte1 = PTE_W | PTE_U | PTE_PG;
+    proc->page_swapped_count+=1;
+    proc->swap_file_pages+=1;
+
+    lcr3(V2P(proc->pgdir));
+    candidate->va = va;
+    return candidate;
+}
+
 struct freepg *writePageToSwapFile(char *va){
 
 #if FIFO
@@ -314,6 +367,8 @@ struct freepg *writePageToSwapFile(char *va){
   return fifoWrite(); 
 #elif SCFIFO
   return scFifoWrite(va);
+#elif NFU
+  return nfuWrite(va);
 #endif
   return 0;  
 }
@@ -333,6 +388,7 @@ void fifoRecord(char *va){
 }
 
 void scFifoRecord(char *va){
+
   struct proc *proc = myproc(); 
   int i;
   for (i = 0; i < MAX_PSYC_PAGES; i++)
@@ -351,18 +407,33 @@ foundrnp:
   proc->head = &proc->free_pages[i];
 }
 
+void nfuRecord(char *va){
+
+  struct proc *proc = myproc();
+  int i;
+  for(i=0; i<MAX_PSYC_PAGES; i++)
+    if(proc->free_pages[i].va == (char*)0xffffffff)
+      goto foundnp;
+  panic("recordNewPage: no free page found in main memory");
+
+  foundnp:
+    proc->free_pages[i].va = va;
+}
+
 void recordNewPage(char *va){
+
   struct proc *proc = myproc();
   #if FIFO
     //cprintf("called FIFO in recordNewPage\n");
     fifoRecord(va);
   #elif SCFIFO
     scFifoRecord(va);
+  #elif NFU 
+    //cprintf("called NFU");
+    nfuRecord(va);
   #endif
   proc->main_mem_pages++;
 }
-
-
 
 // Allocate page tables and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
@@ -534,6 +605,67 @@ void scFifoSwap(uint addr){
     proc->head->va = (char*)PTE_ADDR(addr);
 
 }
+
+void nfuSwap(uint addr){
+
+  struct proc *proc = myproc();
+  int i,j;
+  uint maxIndex = -1;
+  uint maxAge = 0;
+  char buf[BUF_SIZE];
+  pte_t *pte1, *pte2;
+  struct freepg *candidate;
+
+  for (j = 0; j < MAX_PSYC_PAGES; j++){
+    if (proc->free_pages[j].va != (char*)0xffffffff){
+      if (proc->free_pages[j].age > maxAge){
+        maxAge = proc-> free_pages[j].age;
+        maxIndex = j;
+      }
+    }
+  }
+
+  if(maxIndex == -1)
+    panic("nfuSwap: no free page to swap");
+  candidate = &proc->free_pages[maxIndex];
+  pte1 = walkpgdir(proc->pgdir, (void*)candidate->va, 0);
+  if(!*pte1)  
+    panic("nfuSwap: pte1 is empty");
+
+
+  acquire(&tickslock);
+  if((*pte1) & PTE_A){
+    ++candidate->age;
+    *pte1 &= ~PTE_A;
+  }
+  release(&tickslock);
+
+  for (i = 0; i < MAX_PSYC_PAGES; i++){
+    if (proc->swap_space_pages[i].va == (char*)PTE_ADDR(addr))
+      goto foundswappedpageslot;
+  }
+  panic("nfuSwap: no slot for swapped page");
+  foundswappedpageslot:
+
+    proc->swap_space_pages[i].va = candidate->va;
+  pte2 = walkpgdir(proc->pgdir, (void*)addr, 0);
+  if (!*pte2)
+    panic("nfuSwap: pte2 is empty");
+  *pte2 = PTE_ADDR(*pte1) | PTE_U | PTE_W | PTE_P;// access bit is zeroed...
+
+  for (j = 0; j < 4; j++) {
+    int loc = (i * PGSIZE) + ((PGSIZE / 4) * j);
+    int addroffset = ((PGSIZE / 4) * j);
+    memset(buf, 0, BUF_SIZE);
+    readFromSwapFile(proc, buf, loc, BUF_SIZE);
+    writeToSwapFile(proc, (char*)(P2V_WO(PTE_ADDR(*pte1)) + addroffset), loc, BUF_SIZE);
+    memmove((void*)(PTE_ADDR(addr) + addroffset), (void*)buf, BUF_SIZE);
+  }
+  *pte1 = PTE_U | PTE_W | PTE_PG;
+  candidate->va = (char*)PTE_ADDR(addr);
+  candidate->age = 0;
+  
+}
 void swapPages(uint addr){
 
   struct proc *proc = myproc();
@@ -545,6 +677,8 @@ void swapPages(uint addr){
     fifoSwap(addr);
   #elif SCFIFO
     scFifoSwap(addr);
+  #elif NFU 
+    nfuSwap(addr);
   #endif
   lcr3(V2P(proc->pgdir));
   proc->page_swapped_count++;

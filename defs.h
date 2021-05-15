@@ -126,6 +126,7 @@ int             wait(void);
 void            wakeup(void*);
 void            yield(void);
 void            custom_proc_print(struct proc*);
+void            updateNFUState(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

@@ -8,7 +8,6 @@
 int
 main(int argc, char *argv[]){
 
-    //#if FIFO
     printf(1,"-- Process Starts Executing\n");
     int i,j;
     char key_stroke[10];
@@ -33,10 +32,18 @@ main(int argc, char *argv[]){
     printf(1,"\npress ctrl+P to get process details\n");
     gets(key_stroke,10);
     /*
+    FIFO:
     Note that the number of page swaps are 2 
     bcz page 0 is swapped with page 16 and then 
     page fault occurs. Now page 0 will be swapped 
     with page 1. Now swap space has page 1.
+
+    SCFIFO:
+    Note that the number of page swaps will be 1
+    bcz page 0 is the first candidate, however, 
+    it is not swapped as it was used earlier and 
+    hence given a second chance. Page 1 is swapped 
+    into the memory. Now swap space has page 1. 
     */
 
    
@@ -46,10 +53,18 @@ main(int argc, char *argv[]){
     printf(1,"\npress ctrl+P to get process details\n");
     gets(key_stroke,10);
     /* 
+    FIFO:
     The number of page swaps should be 4 bcz page 17 
     is swpped for page 2 but page 2 contains user 
     stack so it will be swapped for page 3. Now swap 
     space has 2 pages i.e page 1 and page 3.
+
+    SCFIFO:
+    The number of page swaps should be 2 bcz now,
+    page 3 will be swapped out into the swap space
+    bcz page 2 was accessed. Now swap space contains
+    page 1 and page 3. And accessbit for page 2 is
+    set to 0. 
     */
 
 
@@ -64,8 +79,15 @@ main(int argc, char *argv[]){
     Note that this function calls arr[i][j] which 
     needs the arr allocated but it was swapped out 
     to the disk. Hence, there is a page fault for 
-    every iteration. Thus the total page faut count 
+    every iteration.
+    
+    FIFO: 
+    Thus the total page faut count 
     goes to 2+6 = 8.
+
+    SCFIFO:
+    The total page fault count goes
+    to 6.
     */
 
 
