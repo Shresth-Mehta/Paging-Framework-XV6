@@ -10,6 +10,7 @@
 #include "file.h"
 #include "proc.h"
 #include "kalloc.h"
+//#include "ulib.c"
 
 struct {
   struct spinlock lock;
@@ -355,6 +356,12 @@ void custom_proc_print(struct proc *proc)
 
  }
 
+int 
+cuscmp(const char *p, const char *q){
+  while(*p && *p == *q)
+    p++, q++;
+  return (uchar)*p - (uchar)*q;
+}
 
 void
 exit(void)
@@ -383,7 +390,8 @@ exit(void)
 
   #if TRUE
     //cprintf("called second macro\n");
-    custom_proc_print(curproc);
+    if(cuscmp(curproc->name,"sh") != 0)
+      custom_proc_print(curproc);
   #endif
     
 
