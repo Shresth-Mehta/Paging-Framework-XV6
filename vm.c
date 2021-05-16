@@ -211,44 +211,6 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
   return 0;
 }
 
-struct freepg *fifoWrite(){
-
-  struct proc *proc = myproc();
-  int i;
-  struct freepg *temp, *last;
-  for(i=0;i<MAX_PSYC_PAGES;i++){
-    //cprintf("address: %p", proc->swap_space_pages[i].va);
-    if(proc->swap_space_pages[i].va == (char*)0xffffffff)
-      goto foundswappedpageslot;
-      
-  }
-  panic("writePagesToSwapFile: FIFO no slot for swapped page");
-foundswappedpageslot:
-  temp = proc->head;
-  if(temp == 0)
-    panic("fifoWrite: proc->head is NULL");
-  if(temp->next == 0)
-    panic("fifoWrite: only one page in phy mem");
-  while(temp->next->next!=0)
-    temp = temp->next;
-  last = temp->next;
-  temp->next = 0;
-
-  proc->swap_space_pages[i].va = last->va;
-  int num = 0;
-  if((num = writeToSwapFile(proc,(char*)PTE_ADDR(last->va),i*PGSIZE, PGSIZE)) == 0)
-    return 0;
-  pte_t *pte1 = walkpgdir(proc->pgdir, (void*)last->va, 0);
-  if(!*pte1)
-    panic("writePageToSwapFile: pte1 is empty");
-  kfree((char*)PTE_ADDR(P2V_WO(*walkpgdir(proc->pgdir, last->va, 0))));
-  *pte1 = PTE_W | PTE_U | PTE_PG;
-  ++proc->page_swapped_count;
-  ++proc->swap_file_pages;
-  lcr3(V2P(proc->pgdir));
-  //cprintf("\ncalled\n");
-  return last;
-}
 
 int 
 accessedBit(char *va){
@@ -262,53 +224,11 @@ accessedBit(char *va){
   return flag;
 }
 
-struct freepg *scFifoWrite(char *va){
 
-  struct proc *proc = myproc();
-  int i;
-  struct freepg *itr, *init_itr;
-  for(i=0; i<MAX_PSYC_PAGES; i++){
-    if(proc->swap_space_pages[i].va == (char*)0xffffffff)
-      goto foundFreeSwapPage;
-  }
-  panic("writePageToSwapFile: No free page available in the swap space");
+struct freepg *writePageToSwapFile(char *va){
 
-  foundFreeSwapPage:
-    if(proc->head == 0 || proc->head->next == 0)
-      panic("scFifoWrite: not enough phy memory pages");
-    itr = proc->tail;
-    init_itr = proc->tail;
-    do{
-    proc->tail = proc->tail->prev;
-    proc->tail->next = 0;
-    itr->prev = 0;
-    itr->next = proc->head;
-    proc->head->prev = itr;
-    proc->head = itr;
-    itr = proc->tail;
-    }while(accessedBit(proc->head->va) && itr !=init_itr);
-  
-    proc->swap_space_pages[i].va = proc->head->va;
-    int num = 0;
-    if ((num = writeToSwapFile(proc, (char*)PTE_ADDR(proc->head->va), i * PGSIZE, PGSIZE)) == 0)
-      return 0;
-    pte_t *pte1 = walkpgdir(proc->pgdir, (void*)proc->head->va, 0);
-    if(!*pte1)
-      panic("writePageToSwapFile: pte1 not found");
-    
-    kfree((char*)PTE_ADDR(P2V_WO(*walkpgdir(proc->pgdir, proc->head->va, 0))));
-    *pte1 = PTE_W | PTE_U | PTE_PG;
-    ++proc->page_swapped_count;
-    ++proc->swap_file_pages;
+#if NFU
 
-    lcr3(V2P(proc->pgdir));
-    proc->head->va = va;
-
-    return proc->head;
-}
-
-struct freepg *nfuWrite(char *va)
-{
   struct proc *proc = myproc();
   int i,j;
   uint maxIndex = -1;
@@ -358,17 +278,88 @@ struct freepg *nfuWrite(char *va)
     lcr3(V2P(proc->pgdir));
     candidate->va = va;
     return candidate;
-}
 
-struct freepg *writePageToSwapFile(char *va){
-
-#if FIFO
-  //cprintf("called fifo");
-  return fifoWrite(); 
 #elif SCFIFO
-  return scFifoWrite(va);
-#elif NFU
-  return nfuWrite(va);
+
+  struct proc *proc = myproc();
+  int i;
+  struct freepg *itr, *init_itr;
+  for(i=0; i<MAX_PSYC_PAGES; i++){
+    if(proc->swap_space_pages[i].va == (char*)0xffffffff)
+      goto foundFreeSwapPage;
+  }
+  panic("writePageToSwapFile: No free page available in the swap space");
+
+  foundFreeSwapPage:
+    if(proc->head == 0 || proc->head->next == 0)
+      panic("scFifoWrite: not enough phy memory pages");
+    itr = proc->tail;
+    init_itr = proc->tail;
+    do{
+    proc->tail = proc->tail->prev;
+    proc->tail->next = 0;
+    itr->prev = 0;
+    itr->next = proc->head;
+    proc->head->prev = itr;
+    proc->head = itr;
+    itr = proc->tail;
+    }while(accessedBit(proc->head->va) && itr !=init_itr);
+  
+    proc->swap_space_pages[i].va = proc->head->va;
+    int num = 0;
+    if ((num = writeToSwapFile(proc, (char*)PTE_ADDR(proc->head->va), i * PGSIZE, PGSIZE)) == 0)
+      return 0;
+    pte_t *pte1 = walkpgdir(proc->pgdir, (void*)proc->head->va, 0);
+    if(!*pte1)
+      panic("writePageToSwapFile: pte1 not found");
+    
+    kfree((char*)PTE_ADDR(P2V_WO(*walkpgdir(proc->pgdir, proc->head->va, 0))));
+    *pte1 = PTE_W | PTE_U | PTE_PG;
+    ++proc->page_swapped_count;
+    ++proc->swap_file_pages;
+
+    lcr3(V2P(proc->pgdir));
+    proc->head->va = va;
+    return proc->head;
+
+#elif FIFO
+
+  struct proc *proc = myproc();
+  int i;
+  struct freepg *temp, *last;
+  for(i=0;i<MAX_PSYC_PAGES;i++){
+    //cprintf("address: %p", proc->swap_space_pages[i].va);
+    if(proc->swap_space_pages[i].va == (char*)0xffffffff)
+      goto foundswappedpageslot;
+      
+  }
+  panic("writePagesToSwapFile: FIFO no slot for swapped page");
+foundswappedpageslot:
+  temp = proc->head;
+  if(temp == 0)
+    panic("fifoWrite: proc->head is NULL");
+  if(temp->next == 0)
+    panic("fifoWrite: only one page in phy mem");
+  while(temp->next->next!=0)
+    temp = temp->next;
+  last = temp->next;
+  temp->next = 0;
+
+  proc->swap_space_pages[i].va = last->va;
+  int num = 0;
+  if((num = writeToSwapFile(proc,(char*)PTE_ADDR(last->va),i*PGSIZE, PGSIZE)) == 0)
+    return 0;
+  pte_t *pte1 = walkpgdir(proc->pgdir, (void*)last->va, 0);
+  if(!*pte1)
+    panic("writePageToSwapFile: pte1 is empty");
+  kfree((char*)PTE_ADDR(P2V_WO(*walkpgdir(proc->pgdir, last->va, 0))));
+  *pte1 = PTE_W | PTE_U | PTE_PG;
+  ++proc->page_swapped_count;
+  ++proc->swap_file_pages;
+  lcr3(V2P(proc->pgdir));
+  //cprintf("\ncalled\n");
+  return last;
+
 #endif
   return 0;  
 }
@@ -462,7 +453,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       if((last = writePageToSwapFile((char*)a)) == 0)
       {
         //cprintf("%p ",last);
-        panic("allocuvm: There was an error writing to swap file");
+        panic("Cannot write to swap file :: allocuvm");
       }
         
       #if FIFO
