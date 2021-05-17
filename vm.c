@@ -587,6 +587,7 @@ void swapPages(uint addr){
         lcr3(V2P(proc->pgdir));
         proc->page_swapped_count++;
         return; 
+      }
     }
     panic("scSwap: SCFIFO no slot for swapped page");
 

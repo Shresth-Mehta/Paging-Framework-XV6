@@ -11,14 +11,15 @@ main(int argc, char *argv[]){
 
 #if NFU
     int i,j;
-    char key_stroke[10];
+    // char key_stroke[10];
     char *page[14];
 
     printf(1, "Testing NFU\n");
     printf(1, "Process Starts Executing\n");
     printf(1,"\npress ctrl+P to get initial process details\n");
     printf(1,"We already have 3 pages for the process in the main memory\n");
-    gets(key_stroke,10);
+    //gets(key_stroke,10);
+    printStats();
     printf(1,"\n-- Adding 12 more pages to the process\n");
     //We already have 3 pages for the process in the main memory.
     //We will now allocate 12 more pages to get to the 15 page limit that we had set
@@ -27,16 +28,20 @@ main(int argc, char *argv[]){
         printf(1,"page[%d]=0x%x\n",i,page[i]);
     }
     printf(1,"\npress ctrl+P to get process details\n");
+    printStats();
     //printf(1,"\nNote that we have 15 pages in the physical memory now\n");
-    gets(key_stroke,10);
+    //gets(key_stroke,10);
+
+    // printStats();
 
     //Adding one more page i.e page no.15 
     printf(1,"\n-- Aloocating 16th page for the process i.e page no. 15\n");
     page[12] = sbrk(PAGESIZE);
     printf(1, "page[12]=0x%x\n", page[13]);
     printf(1,"\npress ctrl+P to get process details\n");
+    printStats();
     //printf(1, "\nNote that page 1 is swapped from the main memory to the disk. Page 0 is spared since its accessbit was 1 as it was used.\n");
-    gets(key_stroke,10);
+    //gets(key_stroke,10);
     /*
 	For this allocation, NFU will choose to move to 
     disk the page that hasn't been accessed the 
@@ -50,7 +55,8 @@ main(int argc, char *argv[]){
     printf(1,"\n-- Aloocating 17th page for the process ie page no. 16\n");
 	printf(1, "page[13]=0x%x\n", page[13]);
 	printf(1,"\npress ctrl+P to get process details\n");
-	gets(key_stroke,10);
+	//gets(key_stroke,10);
+    printStats();
     /*For this allocation, NFU will choose to move to 
     disk the page that hasn't been accessed the longest
     (in this case page 3). Now, pages 1 & 3 are in the
@@ -66,7 +72,8 @@ main(int argc, char *argv[]){
 		}
 	}
     printf(1,"\npress ctrl+P to get process details\n");
-	gets(key_stroke,10);
+    printStats();
+	//gets(key_stroke,10);
     /*
     The above snippet will cause a total of 5 page faults.
 	Accessing page no. 3 causes a PGFLT, since it is in the
@@ -80,11 +87,13 @@ main(int argc, char *argv[]){
     if(fork() == 0){
         printf(1,"\nRunning the child process now, PID: %d\n",getpid());
         printf(1,"\npress ctrl+P to get process details\n");
-        gets(key_stroke,10);
+        printStats();
+        //gets(key_stroke,10);
         page[5][0] = 'J';
         printf(1,"\nTrying to acess page no. 8 and expecting page table fault for 9th page i.e page number 8.\n");
         printf(1,"\npress ctrl+P to get process details\n");
-        gets(key_stroke,10);
+        //gets(key_stroke,10);
+        printStats();
         exit();
     }
     else{
@@ -92,7 +101,8 @@ main(int argc, char *argv[]){
         printf(1,"\n-- Deallocating all pages from the parent process\n");
         sbrk(-14*PAGESIZE);
         printf(1,"\npress ctrl+P to get process details\n");
-        gets(key_stroke,10);
+        printStats();
+        //gets(key_stroke,10);
         exit();   
     }
 
@@ -105,10 +115,11 @@ main(int argc, char *argv[]){
 
     printf(1,"Process Starts Executing\n");
     int i,j;
-    char key_stroke[10];
+    // char key_stroke[10];
     char *page[14];
     printf(1,"\npress ctrl+P to get initial process details\n");
-    gets(key_stroke,10);
+    //gets(key_stroke,10);
+    printStats();
     printf(1,"\n-- Adding 12 more pages to the process\n");
     //We already have 3 pages for the process in the main memory.
     //We will now allocate 12 more pages to get to the 15 page limit that we had set
@@ -117,7 +128,8 @@ main(int argc, char *argv[]){
         printf(1,"page[%d]=0x%x\n",i,page[i]);
     }
     printf(1,"\npress ctrl+P to get process details\n");
-    gets(key_stroke,10);
+    //gets(key_stroke,10);
+    printStats();
 
     
     //Adding one more page should replace page number 0 in memory with 12. 
@@ -126,7 +138,8 @@ main(int argc, char *argv[]){
     printf(1,"page[%d]=0x%x\n",12,page[12]);
     //sbrk returning 61440 but below statement not getting called
     printf(1,"\npress ctrl+P to get process details\n");
-    gets(key_stroke,10);
+    //gets(key_stroke,10);
+    printStats();
     /*
     FIFO:
     Note that the number of page swaps are 2 
@@ -147,7 +160,8 @@ main(int argc, char *argv[]){
     page[13] = sbrk(PAGESIZE);
     printf(1,"page[13]=0x%x",page[13]);
     printf(1,"\npress ctrl+P to get process details\n");
-    gets(key_stroke,10);
+    //gets(key_stroke,10);
+    printStats();
     /* 
     FIFO:
     The number of page swaps should be 4 bcz page 17 
@@ -171,7 +185,8 @@ main(int argc, char *argv[]){
             page[i][j] = 'S';
     }
     printf(1,"\npress ctrl+P to get process details\n");
-    gets(key_stroke,10);
+    //gets(key_stroke,10);
+    printStats();
     /* 
     Note that this function calls page[i][j] which 
     needs the arr allocated but it was swapped out 
@@ -192,11 +207,12 @@ main(int argc, char *argv[]){
     if(fork() == 0){
         printf(1,"\nRunning the child process now, PID: %d\n",getpid());
         printf(1,"\npress ctrl+P to get process details\n");
-        gets(key_stroke,10);
+        //gets(key_stroke,10);
         page[6][0] = 'J';
         printf(1,"\nExpected page table fault for page number 9.\n");
         printf(1,"\npress ctrl+P to get process details\n");
-        gets(key_stroke,10);
+        //gets(key_stroke,10);
+        printStats();
         exit();
     }
     else{
@@ -204,7 +220,8 @@ main(int argc, char *argv[]){
         printf(1,"\n-- Deallocating all pages from the parent process\n");
         sbrk(-14*PAGESIZE);
         printf(1,"\npress ctrl+P to get process details\n");
-        gets(key_stroke,10);
+        //gets(key_stroke,10);
+        printStats();
         exit();   
     }
 #endif

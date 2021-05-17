@@ -8,6 +8,13 @@
 #include "proc.h"
 
 int
+sys_printStats(void){
+  struct proc* p = myproc();
+  custom_proc_print(p);
+  return 0;
+}
+
+int
 sys_fork(void)
 {
   return fork();
