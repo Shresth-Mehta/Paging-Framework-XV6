@@ -8,7 +8,8 @@
 #include "proc.h"
 
 
-int sys_printStats(void)
+int 
+sys_printStats(void)
 {
   struct proc* proc = myproc();
   custom_proc_print(proc);

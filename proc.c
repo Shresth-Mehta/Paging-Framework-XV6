@@ -35,25 +35,25 @@ updateNFUState(){
   acquire(&ptable.lock);
   for(p = ptable.proc; p< &ptable.proc[NPROC]; p++){
     if((p->state == RUNNING || p->state == RUNNABLE || p->state == SLEEPING)){
-        for(i=0; i<MAX_PSYC_PAGES; i++){
-          if(p->free_pages[i].va == (char*)0xffffffff)
-            continue;
-          p->free_pages[i].age++;
-          p->swap_space_pages[i].age++;
+      for(i=0; i<MAX_PSYC_PAGES; i++){
+        if(p->free_pages[i].va == (char*)0xffffffff)
+          continue;
+        p->free_pages[i].age++;
+        p->swap_space_pages[i].age++;
 
-          pde = &p->pgdir[PDX(p->free_pages[i].va)];
-          if(*pde & PTE_P){
-            pte_t *pgtab;
-            pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
-            pte = &pgtab[PTX(p->free_pages[i].va)];
-          }
-          else pte = 0;
-          if(pte){
-            if(*pte & PTE_A){
-              p->free_pages[i].age = 0;
-            }
+        pde = &p->pgdir[PDX(p->free_pages[i].va)];
+        if(*pde & PTE_P){
+          pte_t *pgtab;
+          pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
+          pte = &pgtab[PTX(p->free_pages[i].va)];
+        }
+        else pte = 0;
+        if(pte){
+          if(*pte & PTE_A){
+            p->free_pages[i].age = 0;
           }
         }
+      }
     }
   }
   release(&ptable.lock);

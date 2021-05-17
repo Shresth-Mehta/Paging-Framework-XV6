@@ -433,6 +433,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
   for(; a < newsz; a += PGSIZE){
   #ifndef NONE
+    //cprintf("number of test pages = %d\n",proc->main_mem_pages);
     struct freepg *last;
     uint newpage = 1;
     if(proc->main_mem_pages >= MAX_PSYC_PAGES && proc->pid > 2){
@@ -586,6 +587,7 @@ void swapPages(uint addr){
         lcr3(V2P(proc->pgdir));
         proc->page_swapped_count++;
         return; 
+      }
     }
     panic("scSwap: SCFIFO no slot for swapped page");
 
@@ -841,10 +843,4 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
   return 0;
 }
 
-//PAGEBREAK!
-// Blank page.
-//PAGEBREAK!
-// Blank page.
-//PAGEBREAK!
-// Blank page.
 

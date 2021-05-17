@@ -13,8 +13,8 @@ main(int argc, char *argv[]){
     int i,j;
     char key_stroke[10];
     char *page[14];
-    printf(1, "\n       ***Testing NFU***\n");
-    printf(1, "\n       **Process Starts Executing**\n");
+    printf(1, "\n   ***Testing NFU***\n");
+    printf(1, "\n   **Process Starts Executing**\n");
     printf(1,"\nInitial process details:\n");
     printStats();
 
@@ -74,9 +74,9 @@ main(int argc, char *argv[]){
     Total number of PGFLTs should thus be 5.
 	*/
 
-    printf(1,"\n        ***Testing for fork()***\n");
+    printf(1,"\n    ***Testing for fork()***\n");
     if(fork() == 0){
-        printf(1,"\n        **Running the child process now, PID: %d**\n",getpid());
+        printf(1,"\n    **Running the child process now, PID: %d**\n",getpid());
         printf(1,"\nPRESS KEY: Press ctrl+P to get details of all processes and/or press return to continue\n");
         gets(key_stroke,10);
         page[5][0] = 'J';
@@ -87,7 +87,7 @@ main(int argc, char *argv[]){
     }
     else{
         wait();
-        printf(1,"\n        **Child has exited. Back to the parent process now**\n");
+        printf(1,"\n    **Child has exited. Back to the parent process now**\n");
         printf(1,"\n    **Deallocating all pages from the parent process**\n");
         sbrk(-14*PAGESIZE);
         printf(1,"\nPRESS KEY: Press ctrl+P to get details of all processes and/or press return to continue\n");
@@ -97,11 +97,11 @@ main(int argc, char *argv[]){
 
 #else
     #if FIFO
-        printf(1,"      ***Testing for FIFO***\n");
+        printf(1,"  ***Testing for FIFO***\n");
     #elif SCFIFO
-        printf(1,"      ***Testing for SCFIFO***\n");
+        printf(1,"  ***Testing for SCFIFO***\n");
     #endif
-    printf(1,"\n        **Process Starts Executing**\n");
+    printf(1,"\n    **Process Starts Executing**\n");
     int i,j;
     char key_stroke[10];
     char *page[14];
@@ -186,9 +186,9 @@ main(int argc, char *argv[]){
     */
 
 
-    printf(1,"\n        ***Testing for fork()***\n");
+    printf(1,"\n    ***Testing for fork()***\n");
     if(fork() == 0){
-        printf(1,"\n        **Running the child process now, PID: %d**\n",getpid());
+        printf(1,"\n    **Running the child process now, PID: %d**\n",getpid());
         printf(1,"\nPRESS KEY: Press ctrl+P to get details of all processes and/or press return to continue\n");
         gets(key_stroke,10);
         page[6][0] = 'J';
@@ -199,7 +199,7 @@ main(int argc, char *argv[]){
     }
     else{
         wait();
-        printf(1,"\n        **Child has exited. Back to the parent process now**\n");
+        printf(1,"\n    **Child has exited. Back to the parent process now**\n");
         printf(1,"\n    **Deallocating all pages from the parent process**\n");
         sbrk(-14*PAGESIZE);
         printf(1,"\nPRESS KEY: press ctrl+P to get details of all processes and/or press return to continue\n");
