@@ -7,6 +7,13 @@
 #include "mmu.h"
 #include "proc.h"
 
+
+int sys_printStats(void)
+{
+  struct proc* proc = myproc();
+  custom_proc_print(proc);
+  return 0;
+}
 int
 sys_fork(void)
 {

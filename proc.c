@@ -292,15 +292,7 @@ fork(void)
       if(np->free_pages[j].va == curproc->free_pages[i].prev->va)
         np->free_pages[i].prev = &np->free_pages[j];
     }
-  }
-  #if FIFO
-    for(i = 0;i<MAX_PSYC_PAGES;i++){
-      if(curproc->head->va == np->free_pages[i].va)
-        np->head = &np->free_pages[i];
-      if(curproc->tail->va == np->free_pages[i].va)
-        np->tail = &np->free_pages[i];
-    }
-  #endif  
+  }  
   #if SCFIFO
     for (i = 0; i < MAX_PSYC_PAGES; i++) {
       if (curproc->head->va == np->free_pages[i].va){
@@ -309,6 +301,13 @@ fork(void)
       if (curproc->tail->va == np->free_pages[i].va){
         np->tail = &np->free_pages[i];
       }
+    }
+  #elif FIFO
+    for(i = 0;i<MAX_PSYC_PAGES;i++){
+      if(curproc->head->va == np->free_pages[i].va)
+        np->head = &np->free_pages[i];
+      if(curproc->tail->va == np->free_pages[i].va)
+        np->tail = &np->free_pages[i];
     }
   #endif
 

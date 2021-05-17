@@ -474,7 +474,6 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 }
 
 
-// TODO =-=-=-=-====-=-=-=-=-=-=-=-= 
 void swapPages(uint addr){
 
   struct proc *proc = myproc();
@@ -670,7 +669,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
         for(i=0; i<MAX_PSYC_PAGES; i++){
           if(proc->free_pages[i].va == (char*)a){
             proc->free_pages[i].va = (char*)0xffffffff;
-#if FIFO
+  #if FIFO
             if (proc->head == &proc->free_pages[i])
               proc->head = proc->free_pages[i].next;
             else {
@@ -680,7 +679,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
               last->next = proc->free_pages[i].next;
             }
             proc->free_pages[i].next = 0;
-#elif SCFIFO
+  #elif SCFIFO
             if (proc->head == &proc->free_pages[i]){
               proc->head = proc->free_pages[i].next;
               if(proc->head != 0)
@@ -705,7 +704,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
               proc->free_pages[i].next->prev = last;
             }
 
-#endif     
+  #endif     
             proc->main_mem_pages--;
           }    
         }
