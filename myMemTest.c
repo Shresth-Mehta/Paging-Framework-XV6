@@ -11,7 +11,6 @@ main(int argc, char *argv[]){
 
 #if NFU
     int i,j;
-    char key_stroke[10];
     char *page[14];
     printf(1, "\n   ***Testing NFU***\n");
     printf(1, "\n   **Process Starts Executing**\n");
@@ -77,12 +76,12 @@ main(int argc, char *argv[]){
     printf(1,"\n    ***Testing for fork()***\n");
     if(fork() == 0){
         printf(1,"\n    **Running the child process now, PID: %d**\n",getpid());
-        printf(1,"\nPRESS KEY: Press ctrl+P to get details of all processes and/or press return to continue\n");
-        gets(key_stroke,10);
+        printf(1,"\nDetails of all processes\n");
+        procDump();
         page[5][0] = 'J';
         printf(1,"\n    **Accessing page number 8 which is in the swap space**\n");
-        printf(1,"\nPRESS KEY: Press ctrl+P to get details of all processes and/or press return to continue\n");
-        gets(key_stroke,10);
+        printf(1,"\nDetails of all processes\n");
+        procDump();
         exit();
     }
     else{
@@ -90,8 +89,8 @@ main(int argc, char *argv[]){
         printf(1,"\n    **Child has exited. Back to the parent process now**\n");
         printf(1,"\n    **Deallocating all pages from the parent process**\n");
         sbrk(-14*PAGESIZE);
-        printf(1,"\nPRESS KEY: Press ctrl+P to get details of all processes and/or press return to continue\n");
-        gets(key_stroke,10);
+        printf(1,"\nDetails of all processes\n");
+        procDump();
         exit();   
     }
 
@@ -103,7 +102,6 @@ main(int argc, char *argv[]){
     #endif
     printf(1,"\n    **Process Starts Executing**\n");
     int i,j;
-    char key_stroke[10];
     char *page[14];
     printf(1,"\nInitial process details:\n");
     printStats();
@@ -189,12 +187,12 @@ main(int argc, char *argv[]){
     printf(1,"\n    ***Testing for fork()***\n");
     if(fork() == 0){
         printf(1,"\n    **Running the child process now, PID: %d**\n",getpid());
-        printf(1,"\nPRESS KEY: Press ctrl+P to get details of all processes and/or press return to continue\n");
-        gets(key_stroke,10);
+        printf(1,"\nDetails of all processes\n");
+        procDump();
         page[6][0] = 'J';
         printf(1,"\n    **Accessing page number 9 which is in swap space**\n");
-        printf(1,"\nPRESS KEY: Press ctrl+P to get details of all processes and/or press return to continue**\n");
-        gets(key_stroke,10);
+        printf(1,"\nDetails of all processes\n");
+        procDump();
         exit();
     }
     else{
@@ -202,8 +200,8 @@ main(int argc, char *argv[]){
         printf(1,"\n    **Child has exited. Back to the parent process now**\n");
         printf(1,"\n    **Deallocating all pages from the parent process**\n");
         sbrk(-14*PAGESIZE);
-        printf(1,"\nPRESS KEY: press ctrl+P to get details of all processes and/or press return to continue\n");
-        gets(key_stroke,10);
+        printf(1,"\nDetails of all processes\n");
+        procDump();
         exit();   
     }
 #endif

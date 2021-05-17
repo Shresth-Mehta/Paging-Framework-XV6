@@ -7,6 +7,12 @@
 #include "mmu.h"
 #include "proc.h"
 
+int 
+sys_procDump(void)
+{
+  procdump();
+  return 0;
+}
 
 int 
 sys_printStats(void)

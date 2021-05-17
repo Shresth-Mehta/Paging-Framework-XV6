@@ -151,6 +151,24 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  // initialize process's page data
+  int i;
+  for (i = 0; i < MAX_PSYC_PAGES; i++) {
+    p->swap_space_pages[i].va = (char*)0xffffffff;
+    p->swap_space_pages[i].swaploc = 0;
+    p->swap_space_pages[i].age = 0;
+    p->free_pages[i].va = (char*)0xffffffff;
+    p->free_pages[i].next = 0;
+    p->free_pages[i].prev = 0;
+    p->free_pages[i].age = 0;
+  }
+  p->page_fault_count = 0;
+  p->page_swapped_count = 0;
+  p->main_mem_pages = 0;
+  p->swap_file_pages = 0;
+  p->head = 0;
+  p->tail = 0;
+
   return p;
 }
 
@@ -341,18 +359,17 @@ void custom_proc_print(struct proc *proc)
     state = states[proc->state];
   else
     state = "???";
-  cprintf("\npid:%d state:%s name:%s\n", proc->pid, state, proc->name);
-  cprintf("No. of pages currently in physical memory: %d,\n", proc->main_mem_pages);
-  cprintf("No. of pages currently in swap space: %d,\n", proc->swap_file_pages);
-  cprintf("Count of page faults: %d,\n", proc->page_fault_count);
-  cprintf("Count of paged out pages: %d,\n\n", proc->page_swapped_count);
-  
+  cprintf("\npid:%d state:%s name:%s", proc->pid, state, proc->name);
   if(proc->state == SLEEPING){
       getcallerpcs((uint*)proc->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
         cprintf(" %p", pc[i]);
   }
-
+  cprintf("\nNo. of pages currently in physical memory: %d,\n", proc->main_mem_pages);
+  cprintf("No. of pages currently in swap space: %d,\n", proc->swap_file_pages);
+  cprintf("Count of page faults: %d,\n", proc->page_fault_count);
+  cprintf("Count of paged out pages: %d,\n\n", proc->page_swapped_count);
+  
  }
 
 int 
