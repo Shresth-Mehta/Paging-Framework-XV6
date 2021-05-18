@@ -37,17 +37,18 @@ struct context {
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
-struct discpg {
+/*struct discpg {
   uint swaploc;
   int age;
   char *va;
-};
+};*/
 
 struct freepg {
   char *va;
   int age;
   struct freepg *next;
   struct freepg *prev;
+  uint swaploc;
 };
 
 // Per-process state
@@ -74,7 +75,7 @@ struct proc {
   int page_swapped_count;
   
   struct freepg free_pages[MAX_PSYC_PAGES];
-  struct discpg swap_space_pages[MAX_PSYC_PAGES];
+  struct freepg swap_space_pages[MAX_PSYC_PAGES];
   struct freepg *head;
   struct freepg *tail; 
 };
