@@ -404,11 +404,13 @@ exit(void)
     }
   }
   //cprintf("called1\n");
-  if(curproc->pid >2 &&  curproc->swapFile!=0 && curproc->swapFile->ref > 0)
-  {
-    removeSwapFile(curproc);
-    //cprintf("called1\n");
-  }
+  #ifndef NONE
+    if(curproc->pid >2 &&  curproc->swapFile!=0 && curproc->swapFile->ref > 0)
+    {
+      removeSwapFile(curproc);
+      //cprintf("called1\n");
+    }
+  #endif
 
   #if TRUE
     //cprintf("called second macro\n");

@@ -123,9 +123,11 @@ exec(char *path, char **argv){
   proc->tf->eip = elf.entry;  // main
   proc->tf->esp = sp;
 
-  if(proc->pid > 2){
-    createSwapFile(proc);
-  }
+  #ifndef NONE
+    if(proc->pid > 2){
+      createSwapFile(proc);
+    }
+  #endif
 
   switchuvm(proc);
   freevm(oldpgdir);
