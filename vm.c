@@ -284,9 +284,9 @@ struct freepg *writePageToSwapFile(char *va){
 #elif SCFIFO
 
   struct proc *proc = myproc();
-  int i;
+  int i = 0;
   struct freepg *itr, *init_itr;
-  for(i=0; i<MAX_PSYC_PAGES; i++){
+  while(i<MAX_PSYC_PAGES){
     if(proc->swap_space_pages[i].va == (char*)0xffffffff){
 
       if(proc->head == 0 || proc->head->next == 0)
@@ -320,15 +320,16 @@ struct freepg *writePageToSwapFile(char *va){
       proc->head->va = va;
       return proc->head;
     }
+    i++;
   }
   panic("writePageToSwapFile: No free page available in the swap space");
 
 #elif FIFO
 
   struct proc *proc = myproc();
-  int i;
+  int i=0;
   struct freepg *temp, *last;
-  for(i=0;i<MAX_PSYC_PAGES;i++){
+  while(i<MAX_PSYC_PAGES){
     if(proc->swap_space_pages[i].va == (char*)0xffffffff){
 
       temp = proc->head;
@@ -355,6 +356,7 @@ struct freepg *writePageToSwapFile(char *va){
       lcr3(V2P(proc->pgdir));
       return last;
     }  
+    i++;
   }
   panic("writePagesToSwapFile: FIFO no slot for swapped page");
   
