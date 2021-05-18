@@ -363,10 +363,9 @@ struct freepg *writePageToSwapFile(char *va){
 
 void recordNewPage(char *va){
 
-  struct proc *proc = myproc();
 
   #if NFU 
-
+    struct proc *proc = myproc();
     int i;
     for(i=0; i<MAX_PSYC_PAGES; i++)
     if(proc->free_pages[i].va == (char*)0xffffffff){
@@ -377,7 +376,7 @@ void recordNewPage(char *va){
     panic("recordNewPage: no free page found in main memory");
   
   #elif SCFIFO
-
+    struct proc *proc = myproc();
     int i;
     for (i = 0; i < MAX_PSYC_PAGES; i++)
       if (proc->free_pages[i].va == (char*)0xffffffff){
@@ -396,7 +395,7 @@ void recordNewPage(char *va){
     panic("recordNewPage: no free pages"); 
   
   #elif FIFO 
-  
+    struct proc *proc = myproc();
     int i;
     for(i=0;i<MAX_PSYC_PAGES;i++)
       if(proc->free_pages[i].va == (char*)0xffffffff){
