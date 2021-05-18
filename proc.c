@@ -152,22 +152,24 @@ found:
   p->context->eip = (uint)forkret;
 
   // initialize process's page data
-  int i;
-  for (i = 0; i < MAX_PSYC_PAGES; i++) {
-    p->swap_space_pages[i].va = (char*)0xffffffff;
-    p->swap_space_pages[i].swaploc = 0;
-    p->swap_space_pages[i].age = 0;
-    p->free_pages[i].va = (char*)0xffffffff;
-    p->free_pages[i].next = 0;
-    p->free_pages[i].prev = 0;
-    p->free_pages[i].age = 0;
-  }
-  p->page_fault_count = 0;
-  p->page_swapped_count = 0;
-  p->main_mem_pages = 0;
-  p->swap_file_pages = 0;
-  p->head = 0;
-  p->tail = 0;
+  #ifndef NONE
+    int i;
+    for (i = 0; i < MAX_PSYC_PAGES; i++) {
+      p->swap_space_pages[i].va = (char*)0xffffffff;
+      p->swap_space_pages[i].swaploc = 0;
+      p->swap_space_pages[i].age = 0;
+      p->free_pages[i].va = (char*)0xffffffff;
+      p->free_pages[i].next = 0;
+      p->free_pages[i].prev = 0;
+      p->free_pages[i].age = 0;
+    }
+    p->page_fault_count = 0;
+    p->page_swapped_count = 0;
+    p->main_mem_pages = 0;
+    p->swap_file_pages = 0;
+    p->head = 0;
+    p->tail = 0;
+  #endif
 
   return p;
 }
@@ -245,7 +247,7 @@ growproc(int n)
 int
 fork(void)
 {
-  int i, j, pid;
+  int i, pid;
   struct proc *np;
   struct proc *curproc = myproc();
 
@@ -262,8 +264,10 @@ fork(void)
     return -1;
   }
 
-  np->main_mem_pages = curproc->main_mem_pages;
-  np->swap_file_pages = curproc->swap_file_pages;
+  #ifndef NONE
+    np->main_mem_pages = curproc->main_mem_pages;
+    np->swap_file_pages = curproc->swap_file_pages;
+  #endif
 
   np->sz = curproc->sz;
   np->parent = curproc;
@@ -281,52 +285,54 @@ fork(void)
 
   pid = np->pid;
 
-
-  if(curproc->pid > 2)
-  {
-    createSwapFile(np);
-    char buf[PGSIZE/2] = "";
-    int offset = 0;
-    int nread = 0;
-    while((nread == readFromSwapFile(curproc,buf, offset, PGSIZE/2))!=0)
-      if(writeToSwapFile(np, buf, offset, nread) == -1){
-        panic("fork: error while copying the parent's swap file to the child");
-      offset +=nread;
-    }
-  }
-
-  for(i=0;i<MAX_PSYC_PAGES;i++){
-    np->free_pages[i].va = curproc->free_pages[i].va;
-    np->free_pages[i].age = curproc->free_pages[i].age;
-    np->swap_space_pages[i].va = curproc->swap_space_pages[i].va;
-    np->swap_space_pages[i].age = curproc->swap_space_pages[i].age;
-    np->swap_space_pages[i].swaploc = curproc->swap_space_pages[i].swaploc;
-    }
-
-  for(i = 0; i<MAX_PSYC_PAGES; i++){
-    for(j=0;j<MAX_PSYC_PAGES;++j){
-      if(np->free_pages[j].va == curproc->free_pages[i].next->va)
-        np->free_pages[i].next = &np->free_pages[j];
-      if(np->free_pages[j].va == curproc->free_pages[i].prev->va)
-        np->free_pages[i].prev = &np->free_pages[j];
-    }
-  }  
-  #if SCFIFO
-    for (i = 0; i < MAX_PSYC_PAGES; i++) {
-      if (curproc->head->va == np->free_pages[i].va){
-        np->head = &np->free_pages[i];
-      }
-      if (curproc->tail->va == np->free_pages[i].va){
-        np->tail = &np->free_pages[i];
+  #ifndef NONE
+    if(curproc->pid > 2)
+    {
+      createSwapFile(np);
+      char buf[PGSIZE/2] = "";
+      int offset = 0;
+      int nread = 0;
+      while((nread == readFromSwapFile(curproc,buf, offset, PGSIZE/2))!=0)
+        if(writeToSwapFile(np, buf, offset, nread) == -1){
+          panic("fork: error while copying the parent's swap file to the child");
+        offset +=nread;
       }
     }
-  #elif FIFO
-    for(i = 0;i<MAX_PSYC_PAGES;i++){
-      if(curproc->head->va == np->free_pages[i].va)
-        np->head = &np->free_pages[i];
-      if(curproc->tail->va == np->free_pages[i].va)
-        np->tail = &np->free_pages[i];
-    }
+
+    for(i=0;i<MAX_PSYC_PAGES;i++){
+      np->free_pages[i].va = curproc->free_pages[i].va;
+      np->free_pages[i].age = curproc->free_pages[i].age;
+      np->swap_space_pages[i].va = curproc->swap_space_pages[i].va;
+      np->swap_space_pages[i].age = curproc->swap_space_pages[i].age;
+      np->swap_space_pages[i].swaploc = curproc->swap_space_pages[i].swaploc;
+      }
+
+    int j;
+    for(i = 0; i<MAX_PSYC_PAGES; i++){
+      for(j=0;j<MAX_PSYC_PAGES;++j){
+        if(np->free_pages[j].va == curproc->free_pages[i].next->va)
+          np->free_pages[i].next = &np->free_pages[j];
+        if(np->free_pages[j].va == curproc->free_pages[i].prev->va)
+          np->free_pages[i].prev = &np->free_pages[j];
+      }
+    }  
+    #if SCFIFO
+      for (i = 0; i < MAX_PSYC_PAGES; i++) {
+        if (curproc->head->va == np->free_pages[i].va){
+          np->head = &np->free_pages[i];
+        }
+        if (curproc->tail->va == np->free_pages[i].va){
+          np->tail = &np->free_pages[i];
+        }
+      }
+    #elif FIFO
+      for(i = 0;i<MAX_PSYC_PAGES;i++){
+        if(curproc->head->va == np->free_pages[i].va)
+          np->head = &np->free_pages[i];
+        if(curproc->tail->va == np->free_pages[i].va)
+          np->tail = &np->free_pages[i];
+      }
+    #endif
   #endif
 
   acquire(&ptable.lock);
