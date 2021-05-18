@@ -331,7 +331,6 @@ struct freepg *writePageToSwapFile(char *va){
   struct freepg *temp, *last;
   while(i<MAX_PSYC_PAGES){
     if(proc->swap_space_pages[i].va == (char*)0xffffffff){
-
       temp = proc->head;
       if(temp == 0)
         panic("fifoWrite: proc->head is NULL");
@@ -341,7 +340,6 @@ struct freepg *writePageToSwapFile(char *va){
         temp = temp->next;
       last = temp->next;
       temp->next = 0;
-
       proc->swap_space_pages[i].va = last->va;
       int num = writeToSwapFile(proc,(char*)PTE_ADDR(last->va),i*PGSIZE, PGSIZE);
       if(num == 0)
@@ -368,22 +366,23 @@ struct freepg *writePageToSwapFile(char *va){
 
 void recordNewPage(char *va){
 
-
   #if NFU 
     struct proc *proc = myproc();
-    int i;
-    for(i=0; i<MAX_PSYC_PAGES; i++)
-    if(proc->free_pages[i].va == (char*)0xffffffff){
-      proc->free_pages[i].va = va;
-      proc->main_mem_pages++;
-      return;
+    int i = 0;
+    while(i<MAX_PSYC_PAGES){
+      if(proc->free_pages[i].va == (char*)0xffffffff){
+        proc->free_pages[i].va = va;
+        proc->main_mem_pages++;
+        return;
+      }
+      i++;
     }
     panic("recordNewPage: no free page found in main memory");
   
   #elif SCFIFO
     struct proc *proc = myproc();
-    int i;
-    for (i = 0; i < MAX_PSYC_PAGES; i++)
+    int i=0;
+    while(i < MAX_PSYC_PAGES){
       if (proc->free_pages[i].va == (char*)0xffffffff){
         proc->free_pages[i].va = va;
         proc->free_pages[i].next = proc->head;
@@ -396,13 +395,15 @@ void recordNewPage(char *va){
         proc->main_mem_pages++;
         return;
       }
+      i++;
+    }
     cprintf("panic follows, pid:%d, name:%s\n", proc->pid, proc->name);
     panic("recordNewPage: no free pages"); 
   
   #elif FIFO 
     struct proc *proc = myproc();
-    int i;
-    for(i=0;i<MAX_PSYC_PAGES;i++)
+    int i=0;
+    while(i<MAX_PSYC_PAGES){
       if(proc->free_pages[i].va == (char*)0xffffffff){
         proc->free_pages[i].va = va;
         proc->free_pages[i].next = proc->head;
@@ -410,6 +411,8 @@ void recordNewPage(char *va){
         proc->main_mem_pages++;
         return;
       }
+      i++;
+    }
     cprintf("panic follows, pid:%d, name:%s\n", proc->pid, proc->name);
     panic("recordNewPage: no free pages"); 
   
