@@ -233,15 +233,14 @@ struct freepg *writePageToSwapFile(char *va){
 #if NFU
 
   struct proc *proc = myproc();
-  int i,j;
+  int i = 0,j;
   uint maxIndex = -1;
   uint maxAge = 0;
 
   struct freepg *candidate;
 
-  for(i=0; i<MAX_PSYC_PAGES; i++){
+  while(i<MAX_PSYC_PAGES){
     if(proc->swap_space_pages[i].va == (char*)0xffffffff){
-
       for(j=0; j<MAX_PSYC_PAGES; j++){
         if(proc->free_pages[j].va != (char*)0xffffffff){
           if(proc->free_pages[j].age > maxAge){
@@ -278,6 +277,7 @@ struct freepg *writePageToSwapFile(char *va){
       candidate->va = va;
       return candidate;
     }
+    i++;
   }
   panic("writePageToSwapFile: NFU no slot for swapped page");
 
