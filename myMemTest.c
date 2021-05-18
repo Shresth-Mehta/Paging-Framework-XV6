@@ -11,7 +11,7 @@ main(int argc, char *argv[]){
 
 #if NFU
     int i,j;
-    char *page[14];
+    char *page[15];
     printf(1, "\n   ***Testing NFU***\n");
     printf(1, "\n   **Process Starts Executing**\n");
     printf(1,"\nInitial process details:\n");
@@ -51,12 +51,35 @@ main(int argc, char *argv[]){
     disk the page that hasn't been accessed the longest
     (in this case page 3). Now, pages 1 & 3 are in the
     swap file, the rest are in memory. Note that no page
-    fault should occur. 
+    fault should occur.
     */
 
-   // Trying to cause a page fault by accessing the 4th page i.e page no. 3 which is in swap space
-    printf(1,"\n    **Allocating 17th page for the process ie page no. 16**\n\n");
-    for (i = 0; i < 5; i++) {
+    printf(1,"\n    ** Writing to page 3**\n\n");
+    page[0][0] = 'a';
+    printf(1,"\nProcess details:\n");
+    printStats();
+    /*For this access, NFU will choose to move to 
+    disk the page that hasn't been accessed the longest
+    (in this case page 4). Now, pages 1 & 4 are in the
+    swap file, the rest are in memory. Thus one page
+    fault should occur.
+    PGFLT:1 
+    */
+    
+    printf(1,"\n    **Allocating 18th page for the process ie page no. 17**\n\n");
+	page[14] = sbrk(PAGESIZE);
+	printf(1, "page[14]=0x%x\n", page[14]);
+	printf(1,"\nProcess details:\n");
+    printStats();
+    /*For this allocation, NFU will choose to move to 
+    disk the page that hasn't been accessed the longest
+    (in this case page 5). Now, pages 1, 4 & 5 are in the
+    swap file, the rest are in memory. Note that no page
+    fault should occur. 
+    */
+   // Trying to cause a page fault by accessing the 5th page i.e page no. 4 which is in swap space
+    printf(1,"\n    **Writing to pages 4 to 8 which causes page fault for every page**\n\n");
+    for (i = 1; i < 6; i++) {
 		printf(1, "Writing to address 0x%x\n", page[i]);
 		for (j = 0; j < PAGESIZE; j++){
 			page[i][j] = 'k';
@@ -66,11 +89,13 @@ main(int argc, char *argv[]){
     printStats();
     /*
     The above snippet will cause a total of 5 page faults.
-	Accessing page no. 3 causes a PGFLT, since it is in the
-    swap file. It would be hot-swapped with page 4 which 
-    is accessed next in the loop. Thus, another PGFLT is 
-    invoked, and this process repeats a total of 5 times.
-    Total number of PGFLTs should thus be 5.
+	Accessing page no. 4 causes a PGFLT, since it is in the
+    swap file. It would be hot-swapped with page 6 and next
+    number 5 will be accessed which is in swap space and will
+    hot-swapped with page 7 and then page 6 and so on. Thus,
+    another PGFLT is invoked, and this process repeats 
+    a total of 5 times.
+    Total number of PGFLTs should thus be 1+5.
 	*/
 
     printf(1,"\n    ***Testing for fork()***\n");
@@ -78,7 +103,7 @@ main(int argc, char *argv[]){
         printf(1,"\n    **Running the child process now, PID: %d**\n",getpid());
         printf(1,"\nDetails of all processes\n");
         procDump();
-        page[5][0] = 'J';
+        page[6][0] = 'J';
         printf(1,"\n    **Accessing page number 8 which is in the swap space**\n");
         printf(1,"\nDetails of all processes\n");
         procDump();
@@ -88,7 +113,7 @@ main(int argc, char *argv[]){
         wait();
         printf(1,"\n    **Child has exited. Back to the parent process now**\n");
         printf(1,"\n    **Deallocating all pages from the parent process**\n");
-        sbrk(-14*PAGESIZE);
+        sbrk(-15*PAGESIZE);
         printf(1,"\nDetails of all processes\n");
         procDump();
         exit();   
@@ -160,8 +185,46 @@ main(int argc, char *argv[]){
     */
 
 
+    printf(1,"\n    ** Writing to page 3**\n\n");
+    page[0][0] = 'a';
+    printf(1,"\nProcess details:\n");
+    printStats();
+    /* 
+    FIFO:
+    Number of page swaps should be 5 since page 3 is
+    in swap space,page fault will occur and page 4
+    will be swapped out to swapped space and page 3
+    into main memory.
+
+    SCFIFO:
+    Number of page swaps should be 3 Since page 3 is 
+    in swap space,page fault will occur and page 4 
+    will be swapped out to swapped space because 
+    the access bit is 0 for page 4.
+    */
+    
+
+    printf(1,"\n    **Allocating 18th page for the process i.e page no. 17**\n\n");
+    page[14] = sbrk(PAGESIZE);
+    printf(1,"page[14]=0x%x",page[14]);
+    printf(1,"\nProcess details:\n");
+    printStats();
+    /* 
+    FIFO:
+    The number of page swaps should be 6 bcz page 17 
+    is swpped for page 5. Now swap space has 3 pages
+    i.e page 1, 4 and 5.
+
+    SCFIFO:
+    The number of page swaps should be 4 bcz now,
+    page 5 will be swapped out into the swap space.
+    Now swap space contains page 1, 4 and 5. And 
+    accessbit for page 2 is
+    set to 0. 
+    */
+
     printf(1,"\n    **Trying to cause 6 more page faults by using pages from the swapspace**\n\n");
-    for(i=0; i<6; i++){
+    for(i=1; i<6; i++){
         printf(1, "Writing to address 0x%x\n", page[i]);
         for(j=0; j<PAGESIZE; j++)
             page[i][j] = 'S';
@@ -176,11 +239,11 @@ main(int argc, char *argv[]){
     
     FIFO: 
     Thus the total page faut count 
-    goes to 2+6 = 8.
+    goes to 3+5 = 8.
 
     SCFIFO:
     The total page fault count goes
-    to 6.
+    to 1+5 = 6.
     */
 
 
@@ -189,7 +252,7 @@ main(int argc, char *argv[]){
         printf(1,"\n    **Running the child process now, PID: %d**\n",getpid());
         printf(1,"\nDetails of all processes\n");
         procDump();
-        page[6][0] = 'J';
+        page[8][0] = 'J';
         printf(1,"\n    **Accessing page number 9 which is in swap space**\n");
         printf(1,"\nDetails of all processes\n");
         procDump();
@@ -199,7 +262,7 @@ main(int argc, char *argv[]){
         wait();
         printf(1,"\n    **Child has exited. Back to the parent process now**\n");
         printf(1,"\n    **Deallocating all pages from the parent process**\n");
-        sbrk(-14*PAGESIZE);
+        sbrk(-15*PAGESIZE);
         printf(1,"\nDetails of all processes\n");
         procDump();
         exit();   
