@@ -576,7 +576,7 @@ void swapPages(uint addr){
 
     pte1 = walkpgdir(proc->pgdir, (void*)proc->head->va, 0);
     if (!*pte1)
-      panic("swapFile: SCFIFO pte1 is empty");
+      panic("SCFIFO pte1 is empty :: swapPages");
 
     //find a swap file page descriptor slot
     i = 0;
@@ -617,9 +617,9 @@ void swapPages(uint addr){
     struct freepg *last;
 
     if(temp == 0)
-      panic("fifoSwap: proc->head is NULL");
+      panic("Proc->head is NULL :: fifo :: swapPages");
     if (temp->next == 0)
-      panic("fifoSwap: single page in phys mem");
+      panic("Single page in phys mem :: fifo :: swapPages");
     // find the before-last link in the used pages list
     while (temp->next->next != 0)
       temp = temp->next;
@@ -628,14 +628,14 @@ void swapPages(uint addr){
 
     pte1 = walkpgdir(proc->pgdir,(void*)last->va,0);  
     if(!*pte1)
-      panic("swapFile: FIFO pte1 is empty");
+      panic("FIFO pte1 is empty :: swapPages");
     i = 0;
     while(i<MAX_PSYC_PAGES){
       if(proc->swap_space_pages[i].va == (char*)PTE_ADDR(addr)){
         proc->swap_space_pages[i].va = last->va;
         pte2 = walkpgdir(proc->pgdir, (void*)addr, 0);
         if(!*pte2)
-          panic("swapFile: FIFO pte2 is empty");
+          panic("FIFO pte2 is empty :: swapPages");
         
         *pte2 = PTE_ADDR(*pte1) | PTE_U | PTE_W | PTE_P;
         j = 0;
@@ -671,10 +671,10 @@ void swapPages(uint addr){
 int
 deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
-  pte_t *pte;
-  uint a, pa;
   int i;
+  uint a, pa;
   struct proc* proc = myproc();
+  pte_t *pte;
   if(newsz >= oldsz)
     return oldsz;
 

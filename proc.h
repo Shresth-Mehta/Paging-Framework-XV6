@@ -37,12 +37,6 @@ struct context {
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
-/*struct discpg {
-  uint swaploc;
-  int age;
-  char *va;
-};*/
-
 struct freepg {
   char *va;
   int age;
