@@ -217,11 +217,14 @@ accessedBit(char *va){
   struct proc *proc = myproc();
   uint flag;
   pte_t *pte = walkpgdir(proc->pgdir,(void*)va,0);
-  if(!pte)
+  
+  if(pte){
+    flag = (*pte) & PTE_A;
+    (*pte) &= ~PTE_A;
+    return flag;  
+  }
+  else 
     panic("pte not found");
-  flag = (*pte) & PTE_A;
-  (*pte) &= ~PTE_A;
-  return flag;
 }
 
 
