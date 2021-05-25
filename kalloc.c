@@ -8,6 +8,9 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "spinlock.h"
+#include "kalloc.h"
+
+struct PageCounts free_page_counts;
 
 void freerange(void *vstart, void *vend);
 extern char end[]; // first address after kernel loaded from ELF file
@@ -34,12 +37,15 @@ kinit1(void *vstart, void *vend)
   initlock(&kmem.lock, "kmem");
   kmem.use_lock = 0;
   freerange(vstart, vend);
+  free_page_counts.num_init_free_pages = (PGROUNDDOWN((uint)vend) - PGROUNDUP((uint)vstart)) / PGSIZE;
 }
 
 void
 kinit2(void *vstart, void *vend)
 {
   freerange(vstart, vend);
+  free_page_counts.num_init_free_pages += (PGROUNDDOWN((uint)vend) - PGROUNDUP((uint)vstart)) / PGSIZE;
+  free_page_counts.num_curr_free_pages = free_page_counts.num_init_free_pages;
   kmem.use_lock = 1;
 }
 
@@ -72,6 +78,7 @@ kfree(char *v)
   r = (struct run*)v;
   r->next = kmem.freelist;
   kmem.freelist = r;
+  free_page_counts.num_curr_free_pages++;
   if(kmem.use_lock)
     release(&kmem.lock);
 }
@@ -87,8 +94,10 @@ kalloc(void)
   if(kmem.use_lock)
     acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r){
     kmem.freelist = r->next;
+    free_page_counts.num_curr_free_pages--;
+  }
   if(kmem.use_lock)
     release(&kmem.lock);
   return (char*)r;

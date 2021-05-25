@@ -7,6 +7,20 @@
 #include "mmu.h"
 #include "proc.h"
 
+int 
+sys_procDump(void)
+{
+  procdump();
+  return 0;
+}
+
+int 
+sys_printStats(void)
+{
+  struct proc* proc = myproc();
+  custom_proc_print(proc);
+  return 0;
+}
 int
 sys_fork(void)
 {
@@ -53,6 +67,7 @@ sys_sbrk(void)
   addr = myproc()->sz;
   if(growproc(n) < 0)
     return -1;
+  //cprintf("\ncalled sbrkend %d\n",addr);
   return addr;
 }
 
