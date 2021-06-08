@@ -120,7 +120,11 @@ filewrite(struct file *f, char *addr, int n)
   int r;
 
   if(f->writable == 0)
+  {
+    //cprintf("\ncalled nonwritable\n");
     return -1;
+  }
+    
   if(f->type == FD_PIPE)
     return pipewrite(f->pipe, addr, n);
   if(f->type == FD_INODE){
@@ -150,6 +154,7 @@ filewrite(struct file *f, char *addr, int n)
         panic("short filewrite");
       i += r;
     }
+    //cprintf("called: i == %d andn n == %d\n",i,n);
     return i == n ? n : -1;
   }
   panic("filewrite");

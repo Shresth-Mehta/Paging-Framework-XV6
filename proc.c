@@ -4,8 +4,13 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "x86.h"
-#include "proc.h"
 #include "spinlock.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
+#include "proc.h"
+#include "kalloc.h"
+//#include "ulib.c"
 
 struct {
   struct spinlock lock;
@@ -20,6 +25,39 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+void 
+updateNFUState(){
+
+  struct proc *p;
+  int i;
+  pte_t *pte, *pde;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p< &ptable.proc[NPROC]; p++){
+    if((p->state == RUNNING || p->state == RUNNABLE || p->state == SLEEPING)){
+      for(i=0; i<MAX_PSYC_PAGES; i++){
+        if(p->free_pages[i].va == (char*)0xffffffff)
+          continue;
+        p->free_pages[i].age++;
+        p->swap_space_pages[i].age++;
+
+        pde = &p->pgdir[PDX(p->free_pages[i].va)];
+        if(*pde & PTE_P){
+          pte_t *pgtab;
+          pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
+          pte = &pgtab[PTX(p->free_pages[i].va)];
+        }
+        else pte = 0;
+        if(pte){
+          if(*pte & PTE_A){
+            p->free_pages[i].age = 0;
+          }
+        }
+      }
+    }
+  }
+  release(&ptable.lock);
+}
 void
 pinit(void)
 {
@@ -73,6 +111,7 @@ myproc(void) {
 static struct proc*
 allocproc(void)
 {
+  //cprintf("called allocproc\n");
   struct proc *p;
   char *sp;
 
@@ -112,6 +151,26 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  // initialize process's page data
+  #ifndef NONE
+    int i;
+    for (i = 0; i < MAX_PSYC_PAGES; i++) {
+      p->swap_space_pages[i].va = (char*)0xffffffff;
+      p->swap_space_pages[i].swaploc = 0;
+      p->swap_space_pages[i].age = 0;
+      p->free_pages[i].va = (char*)0xffffffff;
+      p->free_pages[i].next = 0;
+      p->free_pages[i].prev = 0;
+      p->free_pages[i].age = 0;
+    }
+    p->page_fault_count = 0;
+    p->page_swapped_count = 0;
+    p->main_mem_pages = 0;
+    p->swap_file_pages = 0;
+    p->head = 0;
+    p->tail = 0;
+  #endif
+
   return p;
 }
 
@@ -120,6 +179,7 @@ found:
 void
 userinit(void)
 {
+  //cprintf("called userinit\n");
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
@@ -137,7 +197,10 @@ userinit(void)
   p->tf->ss = p->tf->ds;
   p->tf->eflags = FL_IF;
   p->tf->esp = PGSIZE;
+  //cprintf("called before userinit\n");
   p->tf->eip = 0;  // beginning of initcode.S
+
+  //cprintf("called before userinit\n");
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
@@ -163,8 +226,12 @@ growproc(int n)
 
   sz = curproc->sz;
   if(n > 0){
-    if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
+    //cprintf("\ncalled n>0\n");
+    if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0){
+      //cprintf("value of size = %d",sz);
       return -1;
+    }
+      
   } else if(n < 0){
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
@@ -196,6 +263,12 @@ fork(void)
     np->state = UNUSED;
     return -1;
   }
+
+  #ifndef NONE
+    np->main_mem_pages = curproc->main_mem_pages;
+    np->swap_file_pages = curproc->swap_file_pages;
+  #endif
+
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
@@ -212,22 +285,111 @@ fork(void)
 
   pid = np->pid;
 
+  #ifndef NONE
+    if(curproc->pid > 2)
+    {
+      createSwapFile(np);
+      char buf[PGSIZE/2] = "";
+      int offset = 0;
+      int nread = 0;
+      while((nread == readFromSwapFile(curproc,buf, offset, PGSIZE/2))!=0)
+        if(writeToSwapFile(np, buf, offset, nread) == -1){
+          panic("fork: error while copying the parent's swap file to the child");
+        offset +=nread;
+      }
+    }
+
+    for(i=0;i<MAX_PSYC_PAGES;i++){
+      np->free_pages[i].va = curproc->free_pages[i].va;
+      np->free_pages[i].age = curproc->free_pages[i].age;
+      np->swap_space_pages[i].va = curproc->swap_space_pages[i].va;
+      np->swap_space_pages[i].age = curproc->swap_space_pages[i].age;
+      np->swap_space_pages[i].swaploc = curproc->swap_space_pages[i].swaploc;
+      }
+
+    int j;
+    for(i = 0; i<MAX_PSYC_PAGES; i++){
+      for(j=0;j<MAX_PSYC_PAGES;++j){
+        if(np->free_pages[j].va == curproc->free_pages[i].next->va)
+          np->free_pages[i].next = &np->free_pages[j];
+        if(np->free_pages[j].va == curproc->free_pages[i].prev->va)
+          np->free_pages[i].prev = &np->free_pages[j];
+      }
+    }  
+    #if SCFIFO
+      for (i = 0; i < MAX_PSYC_PAGES; i++) {
+        if (curproc->head->va == np->free_pages[i].va){
+          np->head = &np->free_pages[i];
+        }
+        if (curproc->tail->va == np->free_pages[i].va){
+          np->tail = &np->free_pages[i];
+        }
+      }
+    #elif FIFO
+      for(i = 0;i<MAX_PSYC_PAGES;i++){
+        if(curproc->head->va == np->free_pages[i].va)
+          np->head = &np->free_pages[i];
+        if(curproc->tail->va == np->free_pages[i].va)
+          np->tail = &np->free_pages[i];
+      }
+    #endif
+  #endif
+
   acquire(&ptable.lock);
-
   np->state = RUNNABLE;
-
   release(&ptable.lock);
-
   return pid;
 }
 
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
 // until its parent calls wait() to find out it exited.
+
+
+
+void custom_proc_print(struct proc *proc)
+{
+  static char *states[] = {
+  [UNUSED]    "unused",
+  [EMBRYO]    "embryo",
+  [SLEEPING]  "sleep ",
+  [RUNNABLE]  "runble",
+  [RUNNING]   "run   ",
+  [ZOMBIE]    "zombie"
+  };
+  int i;
+  char *state;
+  uint pc[10];
+
+  if(proc->state >= 0 && proc->state < NELEM(states) && states[proc->state])
+    state = states[proc->state];
+  else
+    state = "???";
+  cprintf("\npid:%d state:%s name:%s", proc->pid, state, proc->name);
+  if(proc->state == SLEEPING){
+      getcallerpcs((uint*)proc->context->ebp+2, pc);
+      for(i=0; i<10 && pc[i] != 0; i++)
+        cprintf(" %p", pc[i]);
+  }
+  cprintf("\nNo. of pages currently in physical memory: %d,\n", proc->main_mem_pages);
+  cprintf("No. of pages currently in swap space: %d,\n", proc->swap_file_pages);
+  cprintf("Count of page faults: %d,\n", proc->page_fault_count);
+  cprintf("Count of paged out pages: %d,\n\n", proc->page_swapped_count);
+  
+ }
+
+int 
+cuscmp(const char *p, const char *q){
+  while(*p && *p == *q)
+    p++, q++;
+  return (uchar)*p - (uchar)*q;
+}
+
 void
 exit(void)
 {
   struct proc *curproc = myproc();
+  //cprintf("called_exit %s", curproc->name);
   struct proc *p;
   int fd;
 
@@ -241,6 +403,18 @@ exit(void)
       curproc->ofile[fd] = 0;
     }
   }
+  #ifndef NONE
+    if(curproc->pid >2 &&  curproc->swapFile!=0 && curproc->swapFile->ref > 0)
+    {
+      removeSwapFile(curproc);
+    }
+  #endif
+
+  #if TRUE
+    if(cuscmp(curproc->name,"sh") != 0)
+      custom_proc_print(curproc);
+  #endif
+    
 
   begin_op();
   iput(curproc->cwd);
@@ -251,6 +425,7 @@ exit(void)
 
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
+  
 
   // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -260,7 +435,7 @@ exit(void)
         wakeup1(initproc);
     }
   }
-
+  //cprintf("called2\n");
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   sched();
@@ -344,6 +519,7 @@ scheduler(void)
       p->state = RUNNING;
 
       swtch(&(c->scheduler), p->context);
+      //cprintf("done executing: pid = %d\n",p->pid);
       switchkvm();
 
       // Process is done running for now.
@@ -500,10 +676,11 @@ kill(int pid)
 // Print a process listing to console.  For debugging.
 // Runs when user types ^P on console.
 // No lock to avoid wedging a stuck machine further.
+
 void
 procdump(void)
 {
-  static char *states[] = {
+  /*static char *states[] = {
   [UNUSED]    "unused",
   [EMBRYO]    "embryo",
   [SLEEPING]  "sleep ",
@@ -529,6 +706,15 @@ procdump(void)
       for(i=0; i<10 && pc[i] != 0; i++)
         cprintf(" %p", pc[i]);
     }
-    cprintf("\n");
-  }
+    cprintf("\n");*/
+    struct proc *p;
+    int percentage;
+
+    for(p = ptable.proc; p<&ptable.proc[NPROC]; p++){
+      if(p->state == UNUSED)
+        continue;
+      custom_proc_print(p);
+    }
+    percentage = (free_page_counts.num_curr_free_pages*100)/free_page_counts.num_init_free_pages;
+    cprintf("\n\n Number of free physical pages: %d/%d ~ %d%% \n",free_page_counts.num_curr_free_pages,free_page_counts.num_init_free_pages, percentage);
 }

@@ -36,6 +36,8 @@ idtinit(void)
 void
 trap(struct trapframe *tf)
 {
+  int addr;
+  pde_t *vaddr;
   if(tf->trapno == T_SYSCALL){
     if(myproc()->killed)
       exit();
@@ -48,8 +50,14 @@ trap(struct trapframe *tf)
 
   switch(tf->trapno){
   case T_IRQ0 + IRQ_TIMER:
+    //cprintf("called_1\n");
     if(cpuid() == 0){
       acquire(&tickslock);
+
+      #if NFU
+        updateNFUState();
+      #endif
+
       ticks++;
       wakeup(&ticks);
       release(&tickslock);
@@ -57,6 +65,7 @@ trap(struct trapframe *tf)
     lapiceoi();
     break;
   case T_IRQ0 + IRQ_IDE:
+    //cprintf("called_2\n");
     ideintr();
     lapiceoi();
     break;
@@ -64,12 +73,15 @@ trap(struct trapframe *tf)
     // Bochs generates spurious IDE1 interrupts.
     break;
   case T_IRQ0 + IRQ_KBD:
+    //cprintf("called_KBD\n");
+    //cprintf("called_3\n");
     kbdintr();
     lapiceoi();
     break;
   case T_IRQ0 + IRQ_COM1:
+    //cprintf("called_4\n");
     uartintr();
-    lapiceoi();
+    lapiceoi();;
     break;
   case T_IRQ0 + 7:
   case T_IRQ0 + IRQ_SPURIOUS:
@@ -77,6 +89,18 @@ trap(struct trapframe *tf)
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
     break;
+  
+  case T_PGFLT:
+    addr = rcr2();
+    vaddr = &(myproc()->pgdir[PDX(addr)]);
+    if(((int)(*vaddr) & PTE_P)!=0){
+      if(((uint*)PTE_ADDR(P2V(*vaddr)))[PTX(addr)] & PTE_PG){
+        //cprintf("called T_PGFLT\n");
+        swapPages(PTE_ADDR(addr));
+        ++myproc()->page_fault_count;
+        return;
+      }
+    }
 
   //PAGEBREAK: 13
   default:

@@ -19,6 +19,7 @@ static int uart;    // is there a uart?
 void
 uartinit(void)
 {
+  //cprintf("called_uartinit\n");
   char *p;
 
   // Turn off the FIFO
@@ -73,5 +74,6 @@ uartgetc(void)
 void
 uartintr(void)
 {
+  //cprintf("called uartintr\n");
   consoleintr(uartgetc);
 }
