@@ -1,3 +1,5 @@
+We give due credits to https://github.com/mit-pdos/xv6-public for the implementation of the kernel of Xv6 OS that we have used in our project. In this project, we extend the strength of memory management unit of Xv6 kernel by implementing support for demand paging. We have implemented and compared various page replacement schemes.
+
 ## myMemTest.c
 
 myMemTest.c tests the 3 page swapping algorithms and displays the pages in main memory and swap space after every step
@@ -232,7 +234,6 @@ In FIFO algorithm the page that was first allocated in main memory will get sele
   - <img src="https://i.imgur.com/w4uxk7l.png" style="width:400px;"/>
 
 
-We give due credits to https://github.com/mit-pdos/xv6-public for the implementation of the kernel of Xv6 OS that we have used in our project. In this project, we extend the strength of memory management unit of Xv6 kernel by implementing support for demand paging. We implement and compare various page replacement schemes.
 
 ## Implementation Details
 ### Running the code:
