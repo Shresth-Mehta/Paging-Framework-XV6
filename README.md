@@ -1,10 +1,3 @@
-# ELL405 Assignment-2 Report
-
-- Adarsh Jain(2018EE30525)
-- Shresth Mehta(2018EE30564)
-
-
-
 ## myMemTest.c
 
 myMemTest.c tests the 3 page swapping algorithms and displays the pages in main memory and swap space after every step
